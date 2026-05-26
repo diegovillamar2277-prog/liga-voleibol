@@ -150,9 +150,10 @@ async function renderFormCrearLiga(el) {
     const errEl  = el.querySelector('#crear-error');
     errEl.style.display = 'none';
     try {
-      const liga = await crearLiga({
+      const { currentProfile: cp } = await import('../auth/auth.js');
+        const liga = await crearLiga({
         nombre, temporada: temp,
-        ownerId: currentProfile.id,
+        ownerId: cp.id,
         config: {}, reglas: [], playoffsCfg: {}
       });
       toast('Liga creada ✓');
