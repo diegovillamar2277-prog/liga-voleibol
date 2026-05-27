@@ -71,13 +71,14 @@ async function cargarLiga(codigo) {
 
     if (error || !liga) throw new Error('no encontrada');
 
-    const [{ data: equipos }, { data: partidos }, playoffsResult] = await Promise.all([
+    const [{ data: equipos }, { data: partidos }, { data: playoffsRow }] = await Promise.all([
       client.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
       client.from('matches').select('*').eq('league_id', liga.id).order('fecha'),
-      client.from('playoffs').select('*').eq('league_id', liga.id).single(),
+      client.from('playoffs').select('data').eq('league_id', liga.id).maybeSingle(),
     ]);
 
-    const playoffsData = playoffsResult?.data?.data || null;
+    // playoffsRow es el row de la tabla, y .data es el campo jsonb con el bracket
+    const playoffsData = playoffsRow?.data || null;
 
     const nombreEl = document.querySelector('#pub-liga-nombre');
     if (nombreEl) nombreEl.textContent = liga.nombre;
