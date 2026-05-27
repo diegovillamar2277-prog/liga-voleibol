@@ -41,10 +41,13 @@ async function route() {
 }
 
 document.addEventListener('auth-change', ({ detail }) => {
-  if (detail.event === 'SIGNED_IN')  route();
+  if (detail.event === 'SIGNED_IN') {
+    // Limpiar parámetros de URL y redirigir al panel
+    window.history.replaceState({}, '', '/');
+    route();
+  }
   if (detail.event === 'SIGNED_OUT') renderPublicView(app, '');
 });
-
 document.addEventListener('nav', ({ detail }) => {
   if (detail.page === 'login')  renderAuthScreen(app);
   if (detail.page === 'codigo') renderPublicView(app, '');
