@@ -707,14 +707,45 @@ function renderConfigTab(el) {
       <div class="flex mt1"><button class="btn" id="btn-guardar-formato">💾 Guardar formato</button></div>
     </div>
     <div class="card">
-      <p class="card-subtitle">🔗 Código de acceso público</p>
-      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">
-        Comparte este código para que cualquiera vea tu liga sin iniciar sesión.
+      <p class="card-subtitle">🔗 Acceso público</p>
+      <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
+        Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
       </p>
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <code class="codigo-chip" style="font-size:1.4rem;padding:.5rem 1.2rem">${LIGA.codigo}</code>
-        <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar código</button>
-        <button class="btn secondary" id="btn-copiar-link">📋 Copiar link</button>
+
+      <!-- Alias personalizado -->
+      <div style="margin-bottom:1.2rem">
+        <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.4rem">
+          Nombre corto personalizado
+        </label>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+          <input type="text" id="input-alias"
+            value="${esc(LIGA.alias||'')}"
+            placeholder="ej: lachona"
+            maxlength="20"
+            style="max-width:200px;font-size:.95rem;letter-spacing:.05rem"
+            oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')">
+          <button class="btn" id="btn-guardar-alias">Guardar alias</button>
+        </div>
+        <p class="muted" style="font-size:.75rem;margin-top:.4rem">
+          Solo letras minúsculas, números y guiones. Mínimo 3 caracteres.<br>
+          ${LIGA.alias
+            ? `Link actual: <code style="color:var(--accent)">${location.origin}/?liga=${LIGA.alias}</code>`
+            : 'Sin alias aún — se accede por código aleatorio.'}
+        </p>
+        <div id="alias-error" class="auth-error" style="display:none;margin-top:.4rem"></div>
+        <div id="alias-ok" style="display:none;color:var(--green);font-size:.82rem;margin-top:.4rem"></div>
+      </div>
+
+      <!-- Código aleatorio -->
+      <div style="border-top:1px solid var(--border);padding-top:1rem">
+        <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.6rem">
+          Código de respaldo (siempre funciona)
+        </label>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <code class="codigo-chip" style="font-size:1.3rem;padding:.4rem 1rem">${LIGA.codigo}</code>
+          <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar</button>
+          <button class="btn secondary" id="btn-copiar-link">📋 Copiar link</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -756,6 +787,35 @@ function renderConfigTab(el) {
     await actualizarLiga(LIGA.id, { config: nuevoCfg });
     LIGA.config = nuevoCfg;
     toast('Formato guardado ✓');
+  };
+
+  // Guardar alias
+  el.querySelector('#btn-guardar-alias').onclick = async () => {
+    const aliasInp = el.querySelector('#input-alias');
+    const aliasErr = el.querySelector('#alias-error');
+    const aliasOk  = el.querySelector('#alias-ok');
+    aliasErr.style.display = 'none';
+    aliasOk.style.display  = 'none';
+    const val = aliasInp.value.trim();
+    try {
+      if (!val) {
+        await actualizarLiga(LIGA.id, { alias: null });
+        LIGA.alias = null;
+        aliasOk.textContent = 'Alias eliminado.';
+        aliasOk.style.display = 'block';
+      } else {
+        const { actualizarAlias } = await import('../lib/db.js');
+        const limpio = await actualizarAlias(LIGA.id, val);
+        LIGA.alias = limpio;
+        aliasOk.textContent = `✓ Link: ${location.origin}/?liga=${limpio}`;
+        aliasOk.style.display = 'block';
+      }
+      renderTab('config');
+      toast('Alias guardado ✓');
+    } catch(err) {
+      aliasErr.textContent = err.message;
+      aliasErr.style.display = 'block';
+    }
   };
 
   el.querySelector('#btn-renovar-codigo').onclick = async () => {
