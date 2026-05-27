@@ -17,6 +17,9 @@ let LIGA     = null;
 let equipos  = [];
 let partidos = [];
 
+// Helper: siempre obtener el contenedor activo del DOM
+const getContent = () => document.querySelector('#liga-content');
+
 // Obtener perfil actual de forma segura
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
@@ -46,7 +49,6 @@ export async function renderOrgPanel(container) {
     </div>`;
 
   container.querySelector('#btn-logout-org').addEventListener('click', logout);
-
   const misLigas = await getMisLigas(perfil.id);
 
   if (!misLigas.length) {
@@ -58,19 +60,19 @@ export async function renderOrgPanel(container) {
   }
 }
 
-// ── Sin ligas todavía ────────────────────────────────────────
+// ── Sin ligas ────────────────────────────────────────────────
 function renderSinLigas(el) {
   el.innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">🏐</div>
       <h2>No tienes ligas aún</h2>
-      <p class="muted">Crea tu primera liga para empezar a gestionar equipos y partidos.</p>
+      <p class="muted">Crea tu primera liga para empezar.</p>
       <button class="btn" id="btn-crear-primera">+ Crear mi primera liga</button>
     </div>`;
   el.querySelector('#btn-crear-primera').onclick = () => renderFormCrearLiga(el);
 }
 
-// ── Selector cuando hay varias ligas ────────────────────────
+// ── Selector de ligas ────────────────────────────────────────
 function renderSelectorLigas(ligas, el) {
   el.innerHTML = `
     <div class="ligas-selector">
@@ -96,12 +98,11 @@ function renderSelectorLigas(ligas, el) {
       await abrirLiga(liga, el);
     };
   });
-
   const btnNueva = el.querySelector('#btn-nueva-liga');
   if (btnNueva) btnNueva.onclick = () => renderFormCrearLiga(el);
 }
 
-// ── Formulario crear liga ────────────────────────────────────
+// ── Crear liga ───────────────────────────────────────────────
 async function renderFormCrearLiga(el) {
   const perfil = await getPerfil();
   if (!perfil) { toast('Error de sesión, recarga','error'); return; }
@@ -112,10 +113,10 @@ async function renderFormCrearLiga(el) {
       <div class="empty-state">
         <div class="empty-icon">⚠️</div>
         <h2>Límite de 2 ligas alcanzado</h2>
-        <p class="muted">Para crear más ligas necesitas enviar una petición al administrador.</p>
+        <p class="muted">Envía una petición al administrador para crear más.</p>
         <form id="form-peticion" style="max-width:400px;margin:1.5rem auto 0">
           <textarea id="pet-mensaje" rows="3" style="width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"
-            placeholder="Explica brevemente por qué necesitas más ligas…"></textarea>
+            placeholder="¿Por qué necesitas más ligas?"></textarea>
           <div id="pet-error" class="auth-error" style="display:none"></div>
           <button type="submit" class="btn" style="margin-top:.6rem">Enviar petición</button>
         </form>
@@ -124,11 +125,8 @@ async function renderFormCrearLiga(el) {
       e.preventDefault();
       const msg = el.querySelector('#pet-mensaje').value.trim();
       if (!msg) { toast('Escribe un mensaje','error'); return; }
-      try {
-        await enviarPeticion(perfil.id, msg);
-        toast('Petición enviada ✓');
-        renderOrgPanel(document.querySelector('#app'));
-      } catch(err) { toast(err.message,'error'); }
+      try { await enviarPeticion(perfil.id, msg); toast('Petición enviada ✓'); }
+      catch(err) { toast(err.message,'error'); }
     };
     return;
   }
@@ -163,22 +161,15 @@ async function renderFormCrearLiga(el) {
     try {
       const p = await getPerfil();
       if (!p?.id) throw new Error('Sesión no válida, recarga la página');
-      const liga = await crearLiga({
-        nombre, temporada: temp,
-        ownerId: p.id,
-        config: {}, reglas: [], playoffsCfg: {}
-      });
+      const liga = await crearLiga({ nombre, temporada: temp, ownerId: p.id, config: {}, reglas: [], playoffsCfg: {} });
       toast('Liga creada ✓');
       await abrirLiga(liga, el);
-    } catch(err) {
-      errEl.textContent = err.message;
-      errEl.style.display = 'block';
-    }
+    } catch(err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
   };
 }
 
 // ════════════════════════════════════════════════════════════
-//  VISTA PRINCIPAL DE LA LIGA (tabs)
+//  VISTA PRINCIPAL DE LA LIGA
 // ════════════════════════════════════════════════════════════
 async function abrirLiga(ligaData, el) {
   LIGA     = await getLigaById(ligaData.id);
@@ -200,20 +191,22 @@ async function abrirLiga(ligaData, el) {
     </nav>
     <section id="liga-content" class="section"></section>`;
 
-  const getContent = () => document.querySelector('#liga-content');
-
+  // IMPORTANTE: siempre buscar #liga-content en el DOM, nunca guardar referencia local
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
-      el.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      renderTab(btn.dataset.tab, getContent());
+      renderTab(btn.dataset.tab);
     });
   });
 
-  renderTab('tabla', getContent());
+  renderTab('tabla');
 }
 
-async function renderTab(tab, el) {
+// renderTab sin parámetro el — siempre usa getContent()
+async function renderTab(tab) {
+  const el = getContent();
+  if (!el) return;
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
   LIGA     = await getLigaById(LIGA.id);
@@ -394,14 +387,14 @@ function renderPartidos(el) {
       });
       toast(`✓ ${eA} ${sA}:${sB} ${eB}`);
       e.target.reset();
-      renderTab('partidos', el);
+      renderTab('partidos');
     } catch(err) { toast(err.message,'error'); }
   });
 
   window.eliminarPartidoLiga = async id => {
     if (!confirmar('¿Eliminar este partido?')) return;
     await eliminarPartido(id);
-    renderTab('partidos', el);
+    renderTab('partidos');
     toast('Partido eliminado');
   };
 }
@@ -432,14 +425,14 @@ function renderEquiposTab(el) {
     if (equipos.some(e=>e.nombre.toLowerCase()===nom.toLowerCase())) { toast('Nombre duplicado','error'); return; }
     await agregarEquipo(LIGA.id, nom);
     inp.value = '';
-    renderTab('equipos', el);
+    renderTab('equipos');
     toast('Equipo agregado ✓');
   };
 
   window.eliminarEquipoLiga = async id => {
     if (!confirmar('¿Eliminar este equipo?')) return;
     await eliminarEquipo(id);
-    renderTab('equipos', el);
+    renderTab('equipos');
     toast('Equipo eliminado');
   };
 }
@@ -465,14 +458,64 @@ function renderFinanzas(el) {
   const inscPend = equipos.length - inscPag;
   const arbCob   = norm.reduce((s,p)=>s+(p.pago_arb_a?precioA:0)+(p.pago_arb_b?precioA:0),0);
   const arbPend  = norm.reduce((s,p)=>s+(!p.pago_arb_a?precioA:0)+(!p.pago_arb_b?precioA:0),0);
-
-  // Calcular fixture completo para partidos futuros
   const vueltas  = cfg.vueltas || 2;
   const noms     = equipos.map(e => e.nombre);
   const fixture  = generarFixture(noms);
 
+  // Construir HTML del panel de adelanto por equipo
+  const htmlAdelanto = equipos.map((eq, idx) => {
+    const n   = eq.nombre;
+    const sid = `eq_${idx}`;
+    const jugPend = norm.filter(p=>
+      (p.equipo_a===n&&!p.pago_arb_a)||(p.equipo_b===n&&!p.pago_arb_b)
+    ).length;
+    let futuros = 0;
+    for (let v=1; v<=vueltas; v++) {
+      fixture.forEach(enc => {
+        const eA = v===1 ? enc.local : enc.visitante;
+        const eB = v===1 ? enc.visitante : enc.local;
+        const ya = partidos.find(p => !p.es_playoff && p.vuelta===v &&
+          ((p.equipo_a===eA&&p.equipo_b===eB)||(p.equipo_a===eB&&p.equipo_b===eA)));
+        if (!ya && (eA===n||eB===n)) futuros++;
+      });
+    }
+    const saldo      = eq.arb_saldo || 0;
+    const montoBruto = (jugPend + futuros) * precioA;
+    const montoNeto  = Math.max(0, montoBruto - saldo);
+
+    return `
+      <div class="arb-equipo-row">
+        <div class="arb-equipo-nom">${esc(n)}</div>
+        <div class="arb-equipo-detalle">
+          ${jugPend>0 ? `<span class="muted" style="font-size:.8rem">⚠ ${jugPend} jugado${jugPend!==1?'s':''} pendiente${jugPend!==1?'s':''} ($${(jugPend*precioA).toLocaleString('es-MX')})</span>` : ''}
+          ${futuros>0 ? `<span class="muted" style="font-size:.8rem">📅 ${futuros} futuro${futuros!==1?'s':''} ($${(futuros*precioA).toLocaleString('es-MX')})</span>` : ''}
+          ${saldo>0   ? `<span style="color:#10b981;font-size:.8rem">✓ Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>` : ''}
+          ${montoNeto===0 && jugPend===0
+            ? '<span class="badge win">✓ Al corriente</span>'
+            : `<strong>Pendiente neto: $${montoNeto.toLocaleString('es-MX')}</strong>`}
+        </div>
+        <div class="arb-equipo-acciones">
+          <button class="btn secondary" style="font-size:.8rem"
+            onclick="abrirPagoEquipo('${sid}')">💸 Registrar pago</button>
+        </div>
+        <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
+          <input type="number" id="arb-monto-${sid}"
+            value="${montoNeto > 0 ? montoNeto : precioA}" min="1"
+            style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
+          <button class="btn" style="font-size:.8rem"
+            onclick="confirmarPagoEquipoLiga('${esc(n)}','${sid}',${jugPend},${precioA})">✓ Confirmar</button>
+          <button class="btn secondary" style="font-size:.8rem"
+            onclick="abrirPagoEquipo('${sid}')">Cancelar</button>
+          <p class="muted" style="font-size:.74rem;margin-top:.3rem">
+            Puedes pagar cualquier monto — el sobrante queda como saldo a favor para futuros partidos.
+          </p>
+        </div>
+      </div>`;
+  }).join('');
+
   el.innerHTML = `
     <h2>💰 <span>Finanzas</span></h2>
+
     <div class="resumen-financiero">
       <div class="resumen-fin-grid">
         <div class="resumen-fin-card total">
@@ -482,17 +525,20 @@ function renderFinanzas(el) {
         <div class="resumen-fin-card insc">
           <div class="resumen-fin-val">$${(inscPag*precioI).toLocaleString('es-MX')}</div>
           <div class="resumen-fin-lbl">Inscripciones ${inscPag}/${equipos.length}</div>
-          ${inscPend>0?`<div class="resumen-fin-pend">Pendiente $${(inscPend*precioI).toLocaleString('es-MX')}</div>`:'<div class="resumen-fin-ok">✓</div>'}
+          ${inscPend>0
+            ? `<div class="resumen-fin-pend">Pendiente $${(inscPend*precioI).toLocaleString('es-MX')}</div>`
+            : '<div class="resumen-fin-ok">✓</div>'}
         </div>
         <div class="resumen-fin-card arb">
           <div class="resumen-fin-val">$${arbCob.toLocaleString('es-MX')}</div>
           <div class="resumen-fin-lbl">Arbitrajes cobrados</div>
-          ${arbPend>0?`<div class="resumen-fin-pend">Jugados pendientes $${arbPend.toLocaleString('es-MX')}</div>`:'<div class="resumen-fin-ok">✓ Jugados al corriente</div>'}
+          ${arbPend>0
+            ? `<div class="resumen-fin-pend">Pendiente $${arbPend.toLocaleString('es-MX')}</div>`
+            : '<div class="resumen-fin-ok">✓ Al corriente</div>'}
         </div>
       </div>
     </div>
 
-    <!-- Inscripciones -->
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">📋 Inscripciones</p>
       ${equipos.map(e=>`
@@ -505,61 +551,17 @@ function renderFinanzas(el) {
         </div>`).join('')}
     </div>
 
-    <!-- Adelanto por equipo -->
     ${permitirAdelanto ? `
     <div class="card" style="margin-top:1.2rem">
-      <p class="card-subtitle">💸 Adelanto de arbitrajes por equipo</p>
+      <p class="card-subtitle">💸 Arbitrajes por equipo</p>
       <p class="muted" style="font-size:.8rem;margin-bottom:1rem">
-        Incluye partidos jugados pendientes y partidos futuros del fixture. Puedes pagar cualquier monto parcial.
+        Puedes registrar cualquier monto — parcial o completo. El sobrante se guarda como saldo a favor.
       </p>
-      <div id="panel-adelanto-equipos">
-        ${equipos.map(eq => {
-          const n = eq.nombre;
-          const sid = 'eq_' + equipos.indexOf(eq);
-          const jugPendA = norm.filter(p=>p.equipo_a===n&&!p.pago_arb_a).length;
-          const jugPendB = norm.filter(p=>p.equipo_b===n&&!p.pago_arb_b).length;
-          const totalJug = jugPendA + jugPendB;
-          // Futuros
-          let futuros = 0;
-          for (let v=1;v<=vueltas;v++) {
-            fixture.forEach(enc => {
-              const eA = v===1?enc.local:enc.visitante;
-              const eB = v===1?enc.visitante:enc.local;
-              const yaJugado = partidos.find(p=>!p.es_playoff&&p.vuelta===v&&
-                ((p.equipo_a===eA&&p.equipo_b===eB)||(p.equipo_a===eB&&p.equipo_b===eA)));
-              if (!yaJugado&&(eA===n||eB===n)) futuros++;
-            });
-          }
-          const saldo = eq.arb_saldo||0;
-          const montoBruto = (totalJug+futuros)*precioA;
-          const montoNeto  = Math.max(0, montoBruto - saldo);
-          return `<div class="arb-equipo-row">
-            <div class="arb-equipo-nom">${esc(n)}</div>
-            <div class="arb-equipo-detalle">
-              ${totalJug>0?`<span class="muted" style="font-size:.8rem">⚠ ${totalJug} jugado${totalJug!==1?'s':''} pendiente${totalJug!==1?'s':''} ($${(totalJug*precioA).toLocaleString('es-MX')})</span>`:''}
-              ${futuros>0?`<span class="muted" style="font-size:.8rem">📅 ${futuros} futuro${futuros!==1?'s':''} ($${(futuros*precioA).toLocaleString('es-MX')})</span>`:''}
-              ${saldo>0?`<span style="color:#10b981;font-size:.8rem">✓ Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}
-              ${montoNeto===0&&totalJug===0?'<span class="badge win">✓ Al corriente</span>':`<strong>Pendiente neto: $${montoNeto.toLocaleString('es-MX')}</strong>`}
-              ${saldo>0?`<span style="color:#10b981;font-size:.8rem">💰 Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}            </div>
-            </div>
-          <div class="arb-equipo-acciones">
-            <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">💸 Registrar pago</button>
-          </div>
-          <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
-            <input type="number" id="arb-monto-${sid}" value="${precioA}" min="1"
-              style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
-            <button class="btn" style="font-size:.8rem" onclick="confirmarPagoEquipoLiga('${esc(n)}','${sid}',${totalJug},${precioA})">✓ Confirmar</button>
-            <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">Cancelar</button>
-            <p class="muted" style="font-size:.74rem;margin-top:.3rem">Puedes pagar cualquier monto — el sobrante queda como saldo a favor.</p>
-          </div>
-        </div>`;
-        }).join('')}
-      </div>
+      ${htmlAdelanto}
     </div>` : ''}
 
-    <!-- Detalle por partido -->
     <div class="card" style="margin-top:1.2rem">
-      <p class="card-subtitle">Detalle de arbitrajes por partido</p>
+      <p class="card-subtitle">Detalle por partido</p>
       ${!norm.length ? '<p class="muted">Sin partidos jugados aún.</p>' :
         norm.sort((a,b)=>a.vuelta-b.vuelta).map(p=>`
           <div class="fixture-item" style="flex-direction:column;align-items:flex-start;gap:.4rem">
@@ -571,12 +573,14 @@ function renderFinanzas(el) {
             <div class="arb-row" style="width:100%">
               <div class="arb-pill ${p.pago_arb_a?'pagado':'pendiente'}">
                 <span class="arb-pill-nom">${esc(p.equipo_a)}</span>
-                ${p.pago_arb_a ? '<span class="arb-pill-estado">✓ Pagado</span>'
+                ${p.pago_arb_a
+                  ? '<span class="arb-pill-estado">✓ Pagado</span>'
                   : `<button class="arb-pill-btn" onclick="pagarArbPartido('${p.id}','pago_arb_a')">Pagar $${precioA}</button>`}
               </div>
               <div class="arb-pill ${p.pago_arb_b?'pagado':'pendiente'}">
                 <span class="arb-pill-nom">${esc(p.equipo_b)}</span>
-                ${p.pago_arb_b ? '<span class="arb-pill-estado">✓ Pagado</span>'
+                ${p.pago_arb_b
+                  ? '<span class="arb-pill-estado">✓ Pagado</span>'
                   : `<button class="arb-pill-btn" onclick="pagarArbPartido('${p.id}','pago_arb_b')">Pagar $${precioA}</button>`}
               </div>
             </div>
@@ -586,54 +590,62 @@ function renderFinanzas(el) {
   window.pagarInscripcionLiga = async id => {
     if (!confirmar('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
-    renderTab('finanzas', document.querySelector('#liga-content'));
+    renderTab('finanzas');
     toast('Inscripción registrada ✓');
   };
 
   window.pagarArbPartido = async (id, campo) => {
     await actualizarPartido(id, { [campo]: true });
-    renderTab('finanzas', document.querySelector('#liga-content'));
+    renderTab('finanzas');
     toast('Arbitraje registrado ✓');
   };
 
   window.abrirPagoEquipo = sid => {
     const form = document.getElementById(`arb-form-${sid}`);
-    if (form) form.style.display = form.style.display==='none'?'flex':'none';
+    if (!form) return;
+    form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    form.style.flexWrap = 'wrap';
+    form.style.gap = '.5rem';
+    form.style.alignItems = 'center';
   };
 
-  window.confirmarPagoEquipoLiga = async (nombre, sid, totalJug, precioA) => {
+  window.confirmarPagoEquipoLiga = async (nombre, sid, jugPend, precioA) => {
     const inp   = document.getElementById(`arb-monto-${sid}`);
     const monto = parseInt(inp?.value);
-    if (!monto||monto<1) { toast('Ingresa un monto válido','error'); return; }
-    const eq    = equipos.find(e=>e.nombre===nombre);
-    if (!eq) return;
-    let resto = (eq.arb_saldo||0) + monto;
+    if (!monto || monto < 1) { toast('Ingresa un monto válido','error'); return; }
+    const eq = equipos.find(e => e.nombre === nombre);
+    if (!eq) { toast('Equipo no encontrado','error'); return; }
 
-// Aplicar a jugados pendientes primero
-const pendientes = partidos.filter(p=>
-  !p.es_playoff&&p.jugado&&
-  ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
-).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+    let resto = (eq.arb_saldo || 0) + monto;
 
-for (const p of pendientes) {
-  if (resto < precioA) break;
-  const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
-  await actualizarPartido(p.id, { [campo]: true });
-  resto -= precioA;
-}
+    // Aplicar a partidos jugados pendientes primero (orden cronológico)
+    const pendientes = partidos.filter(p =>
+      !p.es_playoff && p.jugado &&
+      ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
+    ).sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
 
-// El resto queda como saldo a favor (incluye pagos anticipados de futuros)
-await actualizarEquipo(eq.id, { arb_saldo: resto });
-toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto>0?` — Saldo a favor: $${resto.toLocaleString('es-MX')}`:''}`);
-renderTab('finanzas', document.querySelector('#liga-content'));
+    for (const p of pendientes) {
+      if (resto < precioA) break;
+      const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
+      await actualizarPartido(p.id, { [campo]: true });
+      resto -= precioA;
+    }
+
+    // Guardar saldo restante como crédito para futuros
+    await actualizarEquipo(eq.id, { arb_saldo: resto });
+    toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
+    renderTab('finanzas');
   };
 }
 
 // ── Config ───────────────────────────────────────────────────
 function renderConfigTab(el) {
-  const cfg = { nombre:'', temporada:'', vueltas:2, usarPuntos:true, usarSets:true,
+  const cfg = {
+    nombre:'', temporada:'', vueltas:2, usarPuntos:true, usarSets:true,
     ptsVictoria:2, ptsBono:1, ptsDerota:0, precioInscripcion:500, precioArbitraje:120,
-    colorAcento:'#f59e0b', permitirAdelantoArb:true, ...(LIGA.config||{}) };
+    colorAcento:'#f59e0b', permitirAdelantoArb:true,
+    ...(LIGA.config||{})
+  };
 
   el.innerHTML = `
     <h2>⚙ <span>Configuración</span></h2>
@@ -669,7 +681,10 @@ function renderConfigTab(el) {
         </div>
         <label class="check-row cfg-toggle-row">
           <input type="checkbox" id="cfg-adelanto" ${cfg.permitirAdelantoArb!==false?'checked':''}>
-          <span><strong>Permitir adelanto de arbitrajes</strong></span>
+          <span>
+            <strong>Permitir adelanto de arbitrajes</strong>
+            <small>Muestra el panel de pago por equipo en Finanzas.</small>
+          </span>
         </label>
         <div class="flex mt1"><button type="submit" class="btn">💾 Guardar</button></div>
       </form>
@@ -693,7 +708,9 @@ function renderConfigTab(el) {
     </div>
     <div class="card">
       <p class="card-subtitle">🔗 Código de acceso público</p>
-      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">Comparte este código para que cualquiera vea tu liga sin iniciar sesión.</p>
+      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">
+        Comparte este código para que cualquiera vea tu liga sin iniciar sesión.
+      </p>
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
         <code class="codigo-chip" style="font-size:1.4rem;padding:.5rem 1.2rem">${LIGA.codigo}</code>
         <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar código</button>
@@ -714,11 +731,11 @@ function renderConfigTab(el) {
   el.querySelector('#form-cfg-liga').onsubmit = async e => {
     e.preventDefault();
     const nuevoCfg = { ...cfg,
-      nombre: el.querySelector('#cfg-nom').value.trim(),
-      temporada: el.querySelector('#cfg-temp').value.trim(),
-      vueltas: parseInt(el.querySelector('#cfg-vueltas').value),
-      precioInscripcion: parseInt(el.querySelector('#cfg-pinsc').value)||500,
-      precioArbitraje: parseInt(el.querySelector('#cfg-parb').value)||120,
+      nombre:             el.querySelector('#cfg-nom').value.trim(),
+      temporada:          el.querySelector('#cfg-temp').value.trim(),
+      vueltas:            parseInt(el.querySelector('#cfg-vueltas').value),
+      precioInscripcion:  parseInt(el.querySelector('#cfg-pinsc').value)||500,
+      precioArbitraje:    parseInt(el.querySelector('#cfg-parb').value)||120,
       permitirAdelantoArb: el.querySelector('#cfg-adelanto').checked,
     };
     await actualizarLiga(LIGA.id, { nombre: nuevoCfg.nombre, temporada: nuevoCfg.temporada, config: nuevoCfg });
@@ -730,20 +747,23 @@ function renderConfigTab(el) {
 
   el.querySelector('#btn-guardar-formato').onclick = async () => {
     const nuevoCfg = { ...cfg,
-      usarSets: el.querySelector('#cfg-sets').checked,
-      usarPuntos: el.querySelector('#cfg-pts').checked,
+      usarSets:    el.querySelector('#cfg-sets').checked,
+      usarPuntos:  el.querySelector('#cfg-pts').checked,
       ptsVictoria: parseInt(el.querySelector('#cfg-ptsV').value)||2,
-      ptsBono: parseInt(el.querySelector('#cfg-ptsB').value)||0,
-      ptsDerota: parseInt(el.querySelector('#cfg-ptsD').value)||0,
+      ptsBono:     parseInt(el.querySelector('#cfg-ptsB').value)||0,
+      ptsDerota:   parseInt(el.querySelector('#cfg-ptsD').value)||0,
     };
     await actualizarLiga(LIGA.id, { config: nuevoCfg });
-    LIGA.config = nuevoCfg; toast('Formato guardado ✓');
+    LIGA.config = nuevoCfg;
+    toast('Formato guardado ✓');
   };
 
   el.querySelector('#btn-renovar-codigo').onclick = async () => {
     if (!confirmar('¿Renovar el código? El anterior dejará de funcionar.')) return;
     const nuevo = await renovarCodigo(LIGA.id);
-    LIGA.codigo = nuevo; renderTab('config', el); toast('Código renovado ✓');
+    LIGA.codigo = nuevo;
+    renderTab('config');
+    toast('Código renovado ✓');
   };
 
   el.querySelector('#btn-copiar-link').onclick = () => {
@@ -774,7 +794,8 @@ function renderConfigTab(el) {
       if (!confirmar('¿Quitar este co-admin?')) return;
       const m = miembros.find(x=>x.id===id);
       if (m) await quitarMiembro(LIGA.id, m.user_id);
-      cargarCoAdmins(cont); toast('Co-admin eliminado');
+      cargarCoAdmins(cont);
+      toast('Co-admin eliminado');
     };
   }
 }
@@ -790,8 +811,8 @@ const REGLAS_DEFAULT = [
 
 function generarFixture(noms) {
   const enc = [];
-  for (let i=0;i<noms.length;i++)
-    for (let j=i+1;j<noms.length;j++)
+  for (let i=0; i<noms.length; i++)
+    for (let j=i+1; j<noms.length; j++)
       enc.push({ local:noms[i], visitante:noms[j] });
   return enc;
 }
@@ -803,7 +824,7 @@ function calcularTabla(equipos, partidos, cfg) {
   const ptsB = cfg.ptsBono     ?? 1;
   const ptsD = cfg.ptsDerota   ?? 0;
   const t = {};
-  equipos.forEach(e => { t[e.nombre]={equipo:e.nombre,pj:0,pg:0,pp:0,sg:0,sp:0,pts:0}; });
+  equipos.forEach(e => { t[e.nombre] = {equipo:e.nombre,pj:0,pg:0,pp:0,sg:0,sp:0,pts:0}; });
   partidos.filter(p=>p.jugado&&!p.es_playoff).forEach(p => {
     const a=t[p.equipo_a], b=t[p.equipo_b];
     if (!a||!b) return;
@@ -817,7 +838,7 @@ function calcularTabla(equipos, partidos, cfg) {
       if (usarPts) { b.pts+=ptsV; a.pts+=ptsD; if(usarSets&&p.sets_a>0) a.pts+=ptsB; }
     }
   });
-  return Object.values(t).sort((a,b)=>{
+  return Object.values(t).sort((a,b) => {
     if (usarPts&&b.pts!==a.pts) return b.pts-a.pts;
     if (b.pg!==a.pg) return b.pg-a.pg;
     if (usarSets) return (b.sg-b.sp)-(a.sg-a.sp);
@@ -840,7 +861,7 @@ function buildSetsFormLiga(cont, reglas, usarSets) {
   }
   cont.innerHTML = reglas.map((r,i) => {
     const idx=i+1, esD=i===reglas.length-1&&reglas.length>1;
-    const conPts=r.usarPuntosSet!==false;
+    const conPts = r.usarPuntosSet!==false;
     return `<div class="set-block" id="bloque-set${idx}">
       <h4>${esc(r.nombre)}${esD?' <small style="color:var(--accent);font-size:.7rem">(Desempate)</small>':''}</h4>
       <div class="set-score">
@@ -848,29 +869,31 @@ function buildSetsFormLiga(cont, reglas, usarSets) {
         <span>—</span>
         <input type="number" id="s${idx}b" min="0" max="999" placeholder="Eq B">
       </div>
-      <p class="note">${conPts?`Mín ${r.puntos} · Dif ≥ ${r.diferencia}`:'Solo ganador'}</p>
+      <p class="note">${conPts ? `Mín ${r.puntos} · Dif ≥ ${r.diferencia}` : 'Solo ganador'}</p>
     </div>`;
   }).join('');
 }
 
 function leerSets(el, reglas) {
-  const sets=[]; let sA=0,sB=0;
-  for (let i=0;i<reglas.length;i++) {
-    const bloque=el.querySelector(`#bloque-set${i+1}`);
-    if (!bloque||bloque.style.display==='none') break;
-    const pA=parseInt(el.querySelector(`#s${i+1}a`).value);
-    const pB=parseInt(el.querySelector(`#s${i+1}b`).value);
-    if (isNaN(pA)||isNaN(pB)) return {ok:false,msg:`Completa el set ${i+1}`};
-    const r=reglas[i]||reglas[reglas.length-1];
+  const sets=[]; let sA=0, sB=0;
+  for (let i=0; i<reglas.length; i++) {
+    const bloque = el.querySelector(`#bloque-set${i+1}`);
+    if (!bloque || bloque.style.display==='none') break;
+    const pA = parseInt(el.querySelector(`#s${i+1}a`).value);
+    const pB = parseInt(el.querySelector(`#s${i+1}b`).value);
+    if (isNaN(pA)||isNaN(pB)) return {ok:false, msg:`Completa el set ${i+1}`};
+    const r = reglas[i] || reglas[reglas.length-1];
     if (r.usarPuntosSet!==false) {
-      const max=Math.max(pA,pB),min=Math.min(pA,pB);
-      if (max<r.puntos||(max-min)<r.diferencia) return {ok:false,msg:`Set ${i+1} inválido: ${pA}-${pB}`};
-    } else { if (pA===pB) return {ok:false,msg:`Set ${i+1}: debe haber un ganador`}; }
+      const max=Math.max(pA,pB), min=Math.min(pA,pB);
+      if (max<r.puntos||(max-min)<r.diferencia) return {ok:false, msg:`Set ${i+1} inválido: ${pA}-${pB}`};
+    } else {
+      if (pA===pB) return {ok:false, msg:`Set ${i+1}: debe haber un ganador`};
+    }
     sets.push({pA,pB});
-    if(pA>pB) sA++; else sB++;
+    if (pA>pB) sA++; else sB++;
   }
-  const setsParaGanar=Math.ceil(reglas.length/2);
-  const ganador=sA>=setsParaGanar?'A':sB>=setsParaGanar?'B':null;
-  if (!ganador) return {ok:false,msg:'No hay ganador aún. Agrega más sets.'};
-  return {ok:true,sets,sA,sB,ganador};
+  const setsParaGanar = Math.ceil(reglas.length/2);
+  const ganador = sA>=setsParaGanar ? 'A' : sB>=setsParaGanar ? 'B' : null;
+  if (!ganador) return {ok:false, msg:'No hay ganador aún. Agrega más sets.'};
+  return {ok:true, sets, sA, sB, ganador};
 }
