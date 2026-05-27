@@ -9,7 +9,6 @@ import { sb } from '../lib/supabase.js';
 
 export async function getLigaByCodigo(codigo) {
   const q = codigo.trim();
-  // Buscar por alias primero, luego por código aleatorio
   const { data, error } = await sb
     .from('leagues')
     .select('*')
@@ -98,7 +97,7 @@ export async function verificarAlias(alias, ligaId) {
     .eq('alias', alias.toLowerCase())
     .neq('id', ligaId)
     .single();
-  return !!data; // true = ya existe
+  return !!data;
 }
 
 export async function actualizarAlias(ligaId, alias) {
@@ -296,4 +295,41 @@ export async function getPeticiones() {
 
 export async function responderPeticion(id, estado) {
   await sb.from('join_requests').update({ estado }).eq('id', id);
+}
+
+// ════════════════════════════════════════════════════════════
+//  MÉTRICAS — panel admin (Fase 2)
+// ════════════════════════════════════════════════════════════
+
+export async function getMetricas() {
+  const [
+    { count: usuarios },
+    { count: ligas },
+    { count: partidos },
+    { count: equipos },
+    { count: ligasActivas },
+    { count: ligasInactivas },
+    { data: ultimosUsuarios },
+    { data: ultimasLigas },
+  ] = await Promise.all([
+    sb.from('profiles').select('*', { count: 'exact', head: true }),
+    sb.from('leagues').select('*', { count: 'exact', head: true }),
+    sb.from('matches').select('*', { count: 'exact', head: true }).eq('jugado', true),
+    sb.from('teams').select('*', { count: 'exact', head: true }),
+    sb.from('leagues').select('*', { count: 'exact', head: true }).eq('activa', true),
+    sb.from('leagues').select('*', { count: 'exact', head: true }).eq('activa', false),
+    sb.from('profiles').select('id, nombre, email, role').order('created_at', { ascending: false }).limit(5),
+    sb.from('leagues').select('id, nombre, activa, profiles!leagues_owner_id_fkey(email, nombre)').order('created_at', { ascending: false }).limit(5),
+  ]);
+
+  return {
+    usuarios:        usuarios        || 0,
+    ligas:           ligas           || 0,
+    partidos:        partidos        || 0,
+    equipos:         equipos         || 0,
+    ligasActivas:    ligasActivas    || 0,
+    ligasInactivas:  ligasInactivas  || 0,
+    ultimosUsuarios: ultimosUsuarios || [],
+    ultimasLigas:    ultimasLigas    || [],
+  };
 }
