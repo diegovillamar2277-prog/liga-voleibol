@@ -59,21 +59,34 @@ function renderBuscador() {
 // ── Cargar datos de la liga ──────────────────────────────────
 async function cargarLiga(codigo, el) {
   try {
-    const liga = await getLigaByCodigo(codigo);
+    const { getSupabase } = await import('../lib/supabase.js');
+    const client = await getSupabase();
 
-    // Cargar equipos y partidos en paralelo
+    const { data: ligaData, error: ligaErr } = await client
+      .from('leagues')
+      .select('*')
+      .eq('codigo', codigo.toUpperCase())
+      .eq('activa', true)
+      .single();
+
+    if (ligaErr || !ligaData) throw new Error('Liga no encontrada');
+
     const [{ data: equipos }, { data: partidos }] = await Promise.all([
-      sb.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
-      sb.from('matches').select('*').eq('league_id', liga.id).order('fecha')
+      client.from('teams').select('*').eq('league_id', ligaData.id).order('created_at'),
+      client.from('matches').select('*').eq('league_id', ligaData.id).order('fecha')
     ]);
 
-    document.querySelector('#pub-liga-nombre').textContent = liga.nombre;
+    const nombreEl = document.querySelector('#pub-liga-nombre');
+    if (nombreEl) nombreEl.textContent = ligaData.nombre;
 
-    renderLigaPublica(el, liga, equipos || [], partidos || []);
+    renderLigaPublica(el, ligaData, equipos || [], partidos || []);
   } catch (err) {
     el.innerHTML = renderBuscador();
     const errEl = el.querySelector('#buscar-error');
-    if (errEl) { errEl.textContent = 'Código no válido. Verifica e intenta de nuevo.'; errEl.style.display = 'block'; }
+    if (errEl) {
+      errEl.textContent = 'Código no válido. Verifica e intenta de nuevo.';
+      errEl.style.display = 'block';
+    }
     adjuntarBuscador(el);
   }
 }
