@@ -31,6 +31,11 @@ function route() {
 
   // ¿Está logueado?
   if (isLoggedIn()) {
+    const { currentProfile } = await import('./auth/auth.js');
+    if (!currentProfile) {
+      renderPublicView(app, '');
+      return;
+    }
     if (isAdmin()) {
       renderAdminPanel(app);
     } else {
