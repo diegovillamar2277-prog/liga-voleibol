@@ -31,6 +31,8 @@ export async function renderPublicView(container, codigoInicial = '') {
 
   if (codigoInicial) {
     await cargarLiga(codigoInicial, container.querySelector('#pub-body'));
+  } else {
+    adjuntarBuscador(container.querySelector('#pub-body'));
   }
 }
 
