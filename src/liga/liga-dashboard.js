@@ -559,29 +559,45 @@ function renderPlayoffsSetup(el, playoffsCfg) {
   };
 
   el.querySelector('#btn-generar-bracket').onclick = async () => {
+    const btn   = el.querySelector('#btn-generar-bracket');
     const fmt   = el.querySelector('#po-formato').value;
-    const n     = parseInt(el.querySelector('#po-nequipos')?.value || equipos.length);
     const cruce = el.querySelector('#po-cruces').value;
-    const nuevaCfg = { ...playoffsCfg, formato: fmt, equiposCount: n, cruces: cruce };
 
+    // Para liguilla el select está oculto — usar total de equipos
+    const nSelect = el.querySelector('#po-nequipos');
+    const n = (fmt === 'liguilla' || !nSelect)
+      ? equipos.length
+      : parseInt(nSelect.value) || equipos.length;
+
+    const nuevaCfg = { ...playoffsCfg, formato: fmt, equiposCount: n, cruces: cruce };
     await actualizarLiga(LIGA.id, { playoffs_cfg: nuevaCfg });
     LIGA.playoffs_cfg = nuevaCfg;
 
+    // Clasificados: usar tabla si hay partidos, si no usar equipos en orden de creación
     const tablaActual = calcularTabla(equipos, partidos, LIGA.config || {});
-    const clasificados = tablaActual.slice(0, n).map(r => r.equipo);
+    const clasificados = tablaActual.length > 0
+      ? tablaActual.slice(0, n).map(r => r.equipo)
+      : equipos.slice(0, n).map(e => e.nombre);
 
     if (clasificados.length < 2) {
-      toast('Necesitas al menos 2 equipos clasificados', 'error');
+      toast('Necesitas al menos 2 equipos para generar el bracket', 'error');
       return;
     }
 
-    const bracket = fmt === 'eliminacion'
-      ? generarBracketEliminacion(clasificados, cruce)
-      : generarBracketLiguilla(clasificados);
+    btn.disabled = true; btn.textContent = 'Generando…';
+    try {
+      const bracket = fmt === 'eliminacion'
+        ? generarBracketEliminacion(clasificados, cruce)
+        : generarBracketLiguilla(clasificados);
 
-    await guardarPlayoffs(LIGA.id, bracket);
-    toast('Bracket generado ✓');
-    renderTab('playoffs');
+      await guardarPlayoffs(LIGA.id, bracket);
+      toast('Bracket generado ✓');
+      await renderTab('playoffs');
+    } catch(err) {
+      toast('Error al generar bracket: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = '🚀 Generar bracket';
+    }
   };
 }
 
