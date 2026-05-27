@@ -1,5 +1,5 @@
 // ============================================================
-//  liga-dashboard.js — Vista del organizador de su liga
+//  liga-dashboard.js — Vista del organizador de su liga (Fase 2)
 // ============================================================
 import { sb } from '../lib/supabase.js';
 import { logout } from '../auth/auth.js';
@@ -17,10 +17,8 @@ let LIGA     = null;
 let equipos  = [];
 let partidos = [];
 
-// Helper: siempre obtener el contenedor activo del DOM
 const getContent = () => document.querySelector('#liga-content');
 
-// Obtener perfil actual de forma segura
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
   return mod.currentProfile;
@@ -54,6 +52,7 @@ export async function renderOrgPanel(container) {
   if (!misLigas.length) {
     renderSinLigas(container.querySelector('#org-main'));
   } else if (misLigas.length === 1) {
+    localStorage.setItem('liga_ultima', misLigas[0].id);
     await abrirLiga(misLigas[0], container.querySelector('#org-main'));
   } else {
     renderSelectorLigas(misLigas, container.querySelector('#org-main'));
@@ -72,32 +71,67 @@ function renderSinLigas(el) {
   el.querySelector('#btn-crear-primera').onclick = () => renderFormCrearLiga(el);
 }
 
-// ── Selector de ligas ────────────────────────────────────────
+// ── Selector de ligas mejorado ───────────────────────────────
 function renderSelectorLigas(ligas, el) {
+  const ultimaId = localStorage.getItem('liga_ultima');
+
   el.innerHTML = `
     <div class="ligas-selector">
-      <h2>Mis ligas</h2>
+      <div class="selector-header">
+        <h2>Mis ligas</h2>
+        <span class="badge pending">${ligas.length} liga${ligas.length !== 1 ? 's' : ''}</span>
+      </div>
       <div class="ligas-grid">
-        ${ligas.map(l => `
-          <div class="liga-card" data-id="${l.id}">
+        ${ligas.map(l => {
+          const esUltima = l.id === ultimaId;
+          return `
+          <div class="liga-card ${esUltima ? 'liga-card-ultima' : ''}" data-id="${l.id}">
+            ${esUltima ? '<div class="liga-card-badge-ultima">Última visitada</div>' : ''}
             <div class="liga-card-nombre">${esc(l.nombre)}</div>
-            <div class="liga-card-temp muted">${esc(l.temporada||'')}</div>
-            <div class="liga-card-codigo"><code>${l.codigo}</code></div>
-            <span class="badge ${l.miRol==='owner'?'win':'pending'}">${l.miRol==='owner'?'Propietario':'Co-admin'}</span>
-          </div>`).join('')}
-        ${ligas.filter(l=>l.miRol==='owner').length < 2 ? `
-          <div class="liga-card nueva" id="btn-nueva-liga">
-            <div class="liga-card-nombre">+ Nueva liga</div>
+            <div class="liga-card-temp muted">${esc(l.temporada || '—')}</div>
+            <div class="liga-card-codigo"><code>${l.alias || l.codigo}</code></div>
+            <div class="liga-card-stats">
+              <span>👥 <strong>—</strong> equipos</span>
+              <span>🏐 <strong>—</strong> partidos</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem">
+              <span class="badge ${l.miRol === 'owner' ? 'win' : 'pending'}">${l.miRol === 'owner' ? 'Propietario' : 'Co-admin'}</span>
+              <span class="badge ${l.activa ? 'done' : 'danger'}">${l.activa ? 'Activa' : 'Inactiva'}</span>
+            </div>
+          </div>`;
+        }).join('')}
+        ${ligas.filter(l => l.miRol === 'owner').length < 2 ? `
+          <div class="liga-card liga-card-nueva" id="btn-nueva-liga">
+            <div class="liga-card-nueva-icon">＋</div>
+            <div class="liga-card-nombre">Nueva liga</div>
           </div>` : ''}
       </div>
     </div>`;
 
+  // Cargar stats reales
+  ligas.forEach(async l => {
+    try {
+      const [eqs, pts] = await Promise.all([getEquipos(l.id), getPartidos(l.id)]);
+      const card = el.querySelector(`.liga-card[data-id="${l.id}"]`);
+      if (!card) return;
+      const statsEl = card.querySelector('.liga-card-stats');
+      if (statsEl) {
+        const pj = pts.filter(p => p.jugado && !p.es_playoff).length;
+        statsEl.innerHTML = `
+          <span>👥 <strong>${eqs.length}</strong> equipos</span>
+          <span>🏐 <strong>${pj}</strong> partidos</span>`;
+      }
+    } catch (_) {}
+  });
+
   el.querySelectorAll('.liga-card[data-id]').forEach(card => {
     card.onclick = async () => {
       const liga = ligas.find(l => l.id === card.dataset.id);
+      localStorage.setItem('liga_ultima', liga.id);
       await abrirLiga(liga, el);
     };
   });
+
   const btnNueva = el.querySelector('#btn-nueva-liga');
   if (btnNueva) btnNueva.onclick = () => renderFormCrearLiga(el);
 }
@@ -105,7 +139,7 @@ function renderSelectorLigas(ligas, el) {
 // ── Crear liga ───────────────────────────────────────────────
 async function renderFormCrearLiga(el) {
   const perfil = await getPerfil();
-  if (!perfil) { toast('Error de sesión, recarga','error'); return; }
+  if (!perfil) { toast('Error de sesión, recarga', 'error'); return; }
 
   const total = await contarLigasDeUsuario(perfil.id);
   if (total >= 2) {
@@ -124,9 +158,9 @@ async function renderFormCrearLiga(el) {
     el.querySelector('#form-peticion').onsubmit = async e => {
       e.preventDefault();
       const msg = el.querySelector('#pet-mensaje').value.trim();
-      if (!msg) { toast('Escribe un mensaje','error'); return; }
+      if (!msg) { toast('Escribe un mensaje', 'error'); return; }
       try { await enviarPeticion(perfil.id, msg); toast('Petición enviada ✓'); }
-      catch(err) { toast(err.message,'error'); }
+      catch(err) { toast(err.message, 'error'); }
     };
     return;
   }
@@ -191,7 +225,6 @@ async function abrirLiga(ligaData, el) {
     </nav>
     <section id="liga-content" class="section"></section>`;
 
-  // IMPORTANTE: siempre buscar #liga-content en el DOM, nunca guardar referencia local
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
@@ -203,7 +236,6 @@ async function abrirLiga(ligaData, el) {
   renderTab('tabla');
 }
 
-// renderTab sin parámetro el — siempre usa getContent()
 async function renderTab(tab) {
   const el = getContent();
   if (!el) return;
@@ -358,18 +390,18 @@ function renderPartidos(el) {
     const eB     = el.querySelector('#p-eqB').value;
     const vuelta = parseInt(el.querySelector('#p-vuelta').value);
     const fecha  = el.querySelector('#p-fecha').value;
-    if (!eA || !eB) { toast('Selecciona ambos equipos','error'); return; }
-    if (eA === eB)  { toast('Los equipos deben ser diferentes','error'); return; }
-    if (!fecha)     { toast('La fecha es obligatoria','error'); return; }
+    if (!eA || !eB) { toast('Selecciona ambos equipos', 'error'); return; }
+    if (eA === eB)  { toast('Los equipos deben ser diferentes', 'error'); return; }
+    if (!fecha)     { toast('La fecha es obligatoria', 'error'); return; }
 
     let sets=[], sA=0, sB=0, ganador=null;
     if (!usarSets) {
       const rad = el.querySelector('input[name="ganador-simple"]:checked');
-      if (!rad) { toast('Selecciona quién ganó','error'); return; }
+      if (!rad) { toast('Selecciona quién ganó', 'error'); return; }
       ganador = rad.value; sA = ganador==='A'?1:0; sB = ganador==='B'?1:0;
     } else {
       const res = leerSets(el, reglas);
-      if (!res.ok) { toast(res.msg,'error'); return; }
+      if (!res.ok) { toast(res.msg, 'error'); return; }
       sets = res.sets; sA = res.sA; sB = res.sB; ganador = res.ganador;
     }
 
@@ -377,7 +409,7 @@ function renderPartidos(el) {
       !p.es_playoff && p.vuelta===vuelta &&
       ((p.equipo_a===eA&&p.equipo_b===eB)||(p.equipo_a===eB&&p.equipo_b===eA))
     );
-    if (existe) { toast('Ya existe este partido en esa vuelta','error'); return; }
+    if (existe) { toast('Ya existe este partido en esa vuelta', 'error'); return; }
 
     try {
       await guardarPartido(LIGA.id, {
@@ -388,7 +420,7 @@ function renderPartidos(el) {
       toast(`✓ ${eA} ${sA}:${sB} ${eB}`);
       e.target.reset();
       renderTab('partidos');
-    } catch(err) { toast(err.message,'error'); }
+    } catch(err) { toast(err.message, 'error'); }
   });
 
   window.eliminarPartidoLiga = async id => {
@@ -421,8 +453,8 @@ function renderEquiposTab(el) {
   el.querySelector('#btn-add-equipo').onclick = async () => {
     const inp = el.querySelector('#nuevo-equipo');
     const nom = inp.value.trim();
-    if (!nom) { toast('Escribe un nombre','error'); return; }
-    if (equipos.some(e=>e.nombre.toLowerCase()===nom.toLowerCase())) { toast('Nombre duplicado','error'); return; }
+    if (!nom) { toast('Escribe un nombre', 'error'); return; }
+    if (equipos.some(e=>e.nombre.toLowerCase()===nom.toLowerCase())) { toast('Nombre duplicado', 'error'); return; }
     await agregarEquipo(LIGA.id, nom);
     inp.value = '';
     renderTab('equipos');
@@ -437,14 +469,501 @@ function renderEquiposTab(el) {
   };
 }
 
-// ── Playoffs ─────────────────────────────────────────────────
-function renderPlayoffsTab(el) {
+// ════════════════════════════════════════════════════════════
+//  PLAYOFFS (Fase 2)
+// ════════════════════════════════════════════════════════════
+async function renderPlayoffsTab(el) {
+  const playoffsCfg = LIGA.playoffs_cfg || {};
+  const bracket     = await getPlayoffs(LIGA.id);
+
+  if (!bracket) {
+    renderPlayoffsSetup(el, playoffsCfg);
+    return;
+  }
+
+  renderBracket(el, bracket, playoffsCfg);
+}
+
+function renderPlayoffsSetup(el, playoffsCfg) {
+  const tabla    = calcularTabla(equipos, partidos, LIGA.config || {});
+  const formato  = playoffsCfg.formato      || 'eliminacion';
+  const nEquipos = playoffsCfg.equiposCount || Math.min(4, equipos.length);
+  const cruces   = playoffsCfg.cruces       || 'automatico';
+
   el.innerHTML = `
-    <div class="empty-state">
-      <div class="empty-icon">🏆</div>
-      <h2>Playoffs</h2>
-      <p class="muted">Disponible en la próxima actualización.</p>
+    <h2>🏆 <span>Playoffs</span></h2>
+
+    <div class="card">
+      <p class="card-subtitle">⚙ Configuración de Playoffs</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Formato</label>
+          <select id="po-formato">
+            <option value="eliminacion" ${formato === 'eliminacion' ? 'selected' : ''}>Eliminación directa</option>
+            <option value="liguilla"    ${formato === 'liguilla'    ? 'selected' : ''}>Liguilla (todos vs todos)</option>
+          </select>
+        </div>
+        <div class="form-group" id="po-nequipos-wrap" ${formato === 'liguilla' ? 'style="display:none"' : ''}>
+          <label>Equipos clasificados</label>
+          <select id="po-nequipos">
+            ${[4, 8, 16].filter(n => n <= equipos.length).map(n =>
+              `<option value="${n}" ${nEquipos == n ? 'selected' : ''}>${n} equipos</option>`
+            ).join('')}
+            ${equipos.length < 4 && equipos.length > 0 ? `<option value="${equipos.length}" ${nEquipos == equipos.length ? 'selected' : ''}>${equipos.length} equipos</option>` : ''}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Asignación de cruces</label>
+          <select id="po-cruces">
+            <option value="automatico" ${cruces === 'automatico' ? 'selected' : ''}>Automático (por tabla)</option>
+            <option value="manual"     ${cruces === 'manual'     ? 'selected' : ''}>Manual (en orden)</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex mt1">
+        <button class="btn" id="btn-guardar-cfg-playoffs">💾 Guardar configuración</button>
+        <button class="btn secondary" id="btn-generar-bracket">🚀 Generar bracket</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <p class="card-subtitle">📊 Clasificación actual</p>
+      <div class="po-clasificacion">
+        ${tabla.length === 0
+          ? '<p class="empty">No hay equipos en la tabla aún.</p>'
+          : tabla.map((r, i) => `
+            <div class="po-clas-row ${i < nEquipos ? 'clasificado' : ''}">
+              <span class="po-clas-pos">${i + 1}</span>
+              <span class="po-clas-nom">${esc(r.equipo)}</span>
+              <span class="po-clas-pts badge ${i < nEquipos ? 'win' : ''}">${i < nEquipos ? '✓ Clasifica' : 'No clasifica'}</span>
+            </div>`).join('')}
+      </div>
     </div>`;
+
+  el.querySelector('#po-formato').onchange = function() {
+    const wrap = el.querySelector('#po-nequipos-wrap');
+    if (wrap) wrap.style.display = this.value === 'liguilla' ? 'none' : '';
+  };
+
+  el.querySelector('#btn-guardar-cfg-playoffs').onclick = async () => {
+    const nuevaCfg = {
+      ...playoffsCfg,
+      formato:      el.querySelector('#po-formato').value,
+      equiposCount: parseInt(el.querySelector('#po-nequipos')?.value || 4),
+      cruces:       el.querySelector('#po-cruces').value,
+    };
+    await actualizarLiga(LIGA.id, { playoffs_cfg: nuevaCfg });
+    LIGA.playoffs_cfg = nuevaCfg;
+    toast('Configuración guardada ✓');
+    renderTab('playoffs');
+  };
+
+  el.querySelector('#btn-generar-bracket').onclick = async () => {
+    const fmt   = el.querySelector('#po-formato').value;
+    const n     = parseInt(el.querySelector('#po-nequipos')?.value || equipos.length);
+    const cruce = el.querySelector('#po-cruces').value;
+    const nuevaCfg = { ...playoffsCfg, formato: fmt, equiposCount: n, cruces: cruce };
+
+    await actualizarLiga(LIGA.id, { playoffs_cfg: nuevaCfg });
+    LIGA.playoffs_cfg = nuevaCfg;
+
+    const tablaActual = calcularTabla(equipos, partidos, LIGA.config || {});
+    const clasificados = tablaActual.slice(0, n).map(r => r.equipo);
+
+    if (clasificados.length < 2) {
+      toast('Necesitas al menos 2 equipos clasificados', 'error');
+      return;
+    }
+
+    const bracket = fmt === 'eliminacion'
+      ? generarBracketEliminacion(clasificados, cruce)
+      : generarBracketLiguilla(clasificados);
+
+    await guardarPlayoffs(LIGA.id, bracket);
+    toast('Bracket generado ✓');
+    renderTab('playoffs');
+  };
+}
+
+function generarBracketEliminacion(clasificados, cruces) {
+  const n = clasificados.length;
+  let emparejados = [];
+
+  if (cruces === 'automatico') {
+    const mitad = Math.floor(n / 2);
+    for (let i = 0; i < mitad; i++) {
+      emparejados.push([clasificados[i], clasificados[n - 1 - i]]);
+    }
+  } else {
+    for (let i = 0; i < n; i += 2) {
+      emparejados.push([clasificados[i], clasificados[i + 1] || 'BYE']);
+    }
+  }
+
+  const nombresRondas = {
+    2: ['Final'],
+    4: ['Semifinales', 'Final'],
+    8: ['Cuartos de final', 'Semifinales', 'Final'],
+    16: ['Octavos de final', 'Cuartos de final', 'Semifinales', 'Final'],
+  };
+  const totalRondas = Math.ceil(Math.log2(n));
+  const listaRondas = nombresRondas[n] || Array.from({ length: totalRondas }, (_, i) => `Ronda ${i + 1}`);
+
+  const rondas = [];
+  rondas.push({
+    nombre: listaRondas[0],
+    partidos: emparejados.map((par, i) => ({
+      id: `r0p${i}`,
+      equipoA: par[0],
+      equipoB: par[1],
+      setsA: null,
+      setsB: null,
+      ganador: par[1] === 'BYE' ? 'A' : null,
+    }))
+  });
+
+  let partidosAnt = emparejados.length;
+  for (let r = 1; r < listaRondas.length; r++) {
+    const partidosRonda = Math.floor(partidosAnt / 2);
+    rondas.push({
+      nombre: listaRondas[r],
+      partidos: Array.from({ length: partidosRonda }, (_, i) => ({
+        id: `r${r}p${i}`,
+        equipoA: null,
+        equipoB: null,
+        setsA: null,
+        setsB: null,
+        ganador: null,
+      }))
+    });
+    partidosAnt = partidosRonda;
+  }
+
+  return {
+    formato: 'eliminacion',
+    equipos: clasificados,
+    rondas,
+    campeon: null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function generarBracketLiguilla(clasificados) {
+  const partidos = [];
+  for (let i = 0; i < clasificados.length; i++) {
+    for (let j = i + 1; j < clasificados.length; j++) {
+      partidos.push({
+        id: `lg${i}x${j}`,
+        equipoA: clasificados[i],
+        equipoB: clasificados[j],
+        setsA: null,
+        setsB: null,
+        ganador: null,
+      });
+    }
+  }
+  return {
+    formato: 'liguilla',
+    equipos: clasificados,
+    partidos,
+    campeon: null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function renderBracket(el, bracket, playoffsCfg) {
+  const cfg      = LIGA.config || {};
+  const usarSets = cfg.usarSets !== false;
+
+  if (bracket.formato === 'liguilla') {
+    renderBracketLiguilla(el, bracket, usarSets);
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem">
+      <h2>🏆 <span>Playoffs</span></h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        ${bracket.campeon ? `<div class="badge win" style="font-size:.95rem;padding:.4rem .9rem">🥇 Campeón: ${esc(bracket.campeon)}</div>` : ''}
+        <button class="btn secondary small" id="btn-reset-bracket">🗑 Reiniciar</button>
+      </div>
+    </div>
+
+    <div class="bracket-wrap">
+      ${bracket.rondas.map((ronda, ri) => `
+        <div class="bracket-ronda">
+          <div class="bracket-ronda-nombre">${esc(ronda.nombre)}</div>
+          <div class="bracket-partidos">
+            ${ronda.partidos.map((p, pi) => `
+              <div class="bracket-partido ${p.ganador ? 'bracket-partido-jugado' : ''}" id="bpart-${p.id}">
+                <div class="bracket-equipo ${p.ganador === 'A' ? 'bracket-ganador' : ''}">
+                  <span class="bracket-equipo-nom">${p.equipoA ? esc(p.equipoA) : '<span class="muted">Por definir</span>'}</span>
+                  ${p.setsA !== null ? `<span class="bracket-sets">${p.setsA}</span>` : ''}
+                </div>
+                <div class="bracket-vs">vs</div>
+                <div class="bracket-equipo ${p.ganador === 'B' ? 'bracket-ganador' : ''}">
+                  <span class="bracket-equipo-nom">${p.equipoB && p.equipoB !== 'BYE' ? esc(p.equipoB) : p.equipoB === 'BYE' ? '<em class="muted">BYE</em>' : '<span class="muted">Por definir</span>'}</span>
+                  ${p.setsB !== null ? `<span class="bracket-sets">${p.setsB}</span>` : ''}
+                </div>
+                ${p.equipoA && p.equipoB && p.equipoB !== 'BYE' && !p.ganador ? `
+                  <button class="btn secondary small bracket-btn-resultado"
+                    onclick="abrirResultadoBracket('${p.id}',${ri},${pi})">
+                    + Resultado
+                  </button>` : ''}
+                ${p.ganador && p.equipoB !== 'BYE' ? `
+                  <button class="btn secondary small bracket-btn-editar"
+                    onclick="abrirResultadoBracket('${p.id}',${ri},${pi})">
+                    ✏ Editar
+                  </button>` : ''}
+              </div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div id="bracket-modal" class="bracket-modal" style="display:none"></div>`;
+
+  el.querySelector('#btn-reset-bracket').onclick = async () => {
+    if (!confirmar('¿Reiniciar el bracket? Se perderán todos los resultados de playoffs.')) return;
+    await guardarPlayoffs(LIGA.id, null);
+    toast('Bracket eliminado');
+    renderTab('playoffs');
+  };
+
+  window.abrirResultadoBracket = (id, ri, pi) => {
+    const ronda = bracket.rondas[ri];
+    const p     = ronda.partidos[pi];
+    const modal = document.getElementById('bracket-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="bracket-modal-card">
+        <h3 style="margin-bottom:1rem">${esc(ronda.nombre)}</h3>
+        <div class="bracket-modal-equipos">
+          <div class="bracket-modal-equipo">${esc(p.equipoA)}</div>
+          <div class="bracket-modal-sep">vs</div>
+          <div class="bracket-modal-equipo">${esc(p.equipoB)}</div>
+        </div>
+        ${usarSets ? `
+        <div class="form-row" style="margin-top:1rem;justify-content:center">
+          <div class="form-group" style="align-items:center">
+            <label>${esc(p.equipoA)}</label>
+            <input type="number" id="bm-setsA" min="0" max="9" value="${p.setsA ?? ''}" style="max-width:70px;text-align:center;font-size:1.3rem;font-weight:800">
+          </div>
+          <div style="align-self:flex-end;padding:.5rem;font-size:1.2rem;color:var(--muted)">—</div>
+          <div class="form-group" style="align-items:center">
+            <label>${esc(p.equipoB)}</label>
+            <input type="number" id="bm-setsB" min="0" max="9" value="${p.setsB ?? ''}" style="max-width:70px;text-align:center;font-size:1.3rem;font-weight:800">
+          </div>
+        </div>` : `
+        <div style="margin-top:1rem">
+          <label style="display:block;margin-bottom:.5rem;color:var(--muted);font-size:.85rem">Ganador</label>
+          <div style="display:flex;gap:.6rem">
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+              <input type="radio" name="bm-ganador" value="A" ${p.ganador==='A'?'checked':''}> ${esc(p.equipoA)}
+            </label>
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+              <input type="radio" name="bm-ganador" value="B" ${p.ganador==='B'?'checked':''}> ${esc(p.equipoB)}
+            </label>
+          </div>
+        </div>`}
+        <div id="bm-error" class="auth-error" style="display:none;margin-top:.6rem"></div>
+        <div class="flex mt1">
+          <button class="btn" id="btn-bm-guardar">✓ Guardar</button>
+          <button class="btn secondary" id="btn-bm-cerrar">Cancelar</button>
+        </div>
+      </div>`;
+
+    document.getElementById('btn-bm-cerrar').onclick = () => { modal.style.display = 'none'; };
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+
+    document.getElementById('btn-bm-guardar').onclick = async () => {
+      const errEl = document.getElementById('bm-error');
+      errEl.style.display = 'none';
+      let sA, sB, ganador;
+
+      if (usarSets) {
+        sA = parseInt(document.getElementById('bm-setsA').value);
+        sB = parseInt(document.getElementById('bm-setsB').value);
+        if (isNaN(sA) || isNaN(sB)) { errEl.textContent = 'Ingresa los sets'; errEl.style.display = 'block'; return; }
+        if (sA === sB) { errEl.textContent = 'Debe haber un ganador'; errEl.style.display = 'block'; return; }
+        ganador = sA > sB ? 'A' : 'B';
+      } else {
+        const rad = document.querySelector('input[name="bm-ganador"]:checked');
+        if (!rad) { errEl.textContent = 'Selecciona el ganador'; errEl.style.display = 'block'; return; }
+        ganador = rad.value; sA = ganador === 'A' ? 1 : 0; sB = ganador === 'B' ? 1 : 0;
+      }
+
+      bracket.rondas[ri].partidos[pi] = { ...p, setsA: sA, setsB: sB, ganador };
+
+      const ganadorNombre = ganador === 'A' ? p.equipoA : p.equipoB;
+      const siguienteRonda = bracket.rondas[ri + 1];
+      if (siguienteRonda) {
+        const posEnSiguiente  = Math.floor(pi / 2);
+        const ladoEnSiguiente = pi % 2 === 0 ? 'equipoA' : 'equipoB';
+        siguienteRonda.partidos[posEnSiguiente][ladoEnSiguiente] = ganadorNombre;
+      } else {
+        bracket.campeon = ganadorNombre;
+      }
+
+      await guardarPlayoffs(LIGA.id, bracket);
+      modal.style.display = 'none';
+      toast(`✓ ${ganadorNombre} avanza`);
+      renderTab('playoffs');
+    };
+  };
+}
+
+function renderBracketLiguilla(el, bracket, usarSets) {
+  const tablaLig = {};
+  bracket.equipos.forEach(e => { tablaLig[e] = { equipo: e, pj: 0, pg: 0, pp: 0, pts: 0 }; });
+  bracket.partidos.filter(p => p.ganador).forEach(p => {
+    const a = tablaLig[p.equipoA], b = tablaLig[p.equipoB];
+    if (!a || !b) return;
+    a.pj++; b.pj++;
+    if (p.ganador === 'A') { a.pg++; b.pp++; a.pts += 2; }
+    else { b.pg++; a.pp++; b.pts += 2; }
+  });
+  const tablaOrdenada = Object.values(tablaLig).sort((a, b) => b.pts - a.pts || b.pg - a.pg);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem">
+      <h2>🏆 <span>Liguilla</span></h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        ${bracket.campeon ? `<div class="badge win" style="font-size:.95rem;padding:.4rem .9rem">🥇 ${esc(bracket.campeon)}</div>` : ''}
+        <button class="btn secondary small" id="btn-reset-bracket">🗑 Reiniciar</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <p class="card-subtitle">Tabla de Liguilla</p>
+      <div class="tabla-wrap">
+        <table class="tabla-pos">
+          <thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PP</th><th>PTS</th></tr></thead>
+          <tbody>
+            ${tablaOrdenada.map((r, i) => `
+              <tr ${i === 0 ? 'class="top-row"' : ''}>
+                <td>${i === 0 ? '🥇' : i + 1}</td>
+                <td>${esc(r.equipo)}</td>
+                <td>${r.pj}</td>
+                <td class="green">${r.pg}</td>
+                <td class="red">${r.pp}</td>
+                <td class="pts-cell">${r.pts}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="card-subtitle">Partidos de Liguilla</p>
+      <div class="fixture-list">
+        ${bracket.partidos.map(p => `
+          <div class="fixture-item ${p.ganador ? 'jugado' : ''}">
+            <div class="fixture-teams">
+              <span class="${p.ganador === 'A' ? 'team-win' : ''}">${esc(p.equipoA)}</span>
+              <span class="fixture-vs">${p.ganador ? `${p.setsA}:${p.setsB}` : 'vs'}</span>
+              <span class="${p.ganador === 'B' ? 'team-win' : ''}">${esc(p.equipoB)}</span>
+            </div>
+            ${p.ganador
+              ? `<span class="badge win">🏆 ${esc(p.ganador === 'A' ? p.equipoA : p.equipoB)}</span>
+                 <button class="btn secondary small" onclick="abrirResultadoLiguilla('${p.id}')">✏ Editar</button>`
+              : `<button class="btn secondary small" onclick="abrirResultadoLiguilla('${p.id}')">+ Resultado</button>`}
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div id="bracket-modal" class="bracket-modal" style="display:none"></div>`;
+
+  el.querySelector('#btn-reset-bracket').onclick = async () => {
+    if (!confirmar('¿Reiniciar la liguilla?')) return;
+    await guardarPlayoffs(LIGA.id, null);
+    toast('Liguilla eliminada');
+    renderTab('playoffs');
+  };
+
+  window.abrirResultadoLiguilla = id => {
+    const p     = bracket.partidos.find(x => x.id === id);
+    if (!p) return;
+    const modal = document.getElementById('bracket-modal');
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="bracket-modal-card">
+        <h3 style="margin-bottom:1rem">Resultado de Liguilla</h3>
+        <div class="bracket-modal-equipos">
+          <div class="bracket-modal-equipo">${esc(p.equipoA)}</div>
+          <div class="bracket-modal-sep">vs</div>
+          <div class="bracket-modal-equipo">${esc(p.equipoB)}</div>
+        </div>
+        ${usarSets ? `
+        <div class="form-row" style="margin-top:1rem;justify-content:center">
+          <div class="form-group" style="align-items:center">
+            <label>${esc(p.equipoA)}</label>
+            <input type="number" id="bm-setsA" min="0" max="9" value="${p.setsA ?? ''}" style="max-width:70px;text-align:center;font-size:1.3rem;font-weight:800">
+          </div>
+          <div style="align-self:flex-end;padding:.5rem;color:var(--muted)">—</div>
+          <div class="form-group" style="align-items:center">
+            <label>${esc(p.equipoB)}</label>
+            <input type="number" id="bm-setsB" min="0" max="999" value="${p.setsB ?? ''}" style="max-width:70px;text-align:center;font-size:1.3rem;font-weight:800">
+          </div>
+        </div>` : `
+        <div style="margin-top:1rem">
+          <label style="display:block;margin-bottom:.5rem;color:var(--muted);font-size:.85rem">Ganador</label>
+          <div style="display:flex;gap:.6rem">
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+              <input type="radio" name="bm-ganador" value="A" ${p.ganador==='A'?'checked':''}> ${esc(p.equipoA)}
+            </label>
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+              <input type="radio" name="bm-ganador" value="B" ${p.ganador==='B'?'checked':''}> ${esc(p.equipoB)}
+            </label>
+          </div>
+        </div>`}
+        <div id="bm-error" class="auth-error" style="display:none;margin-top:.6rem"></div>
+        <div class="flex mt1">
+          <button class="btn" id="btn-bm-guardar">✓ Guardar</button>
+          <button class="btn secondary" id="btn-bm-cerrar">Cancelar</button>
+        </div>
+      </div>`;
+
+    document.getElementById('btn-bm-cerrar').onclick = () => { modal.style.display = 'none'; };
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+
+    document.getElementById('btn-bm-guardar').onclick = async () => {
+      const errEl = document.getElementById('bm-error');
+      let sA, sB, ganador;
+      if (usarSets) {
+        sA = parseInt(document.getElementById('bm-setsA').value);
+        sB = parseInt(document.getElementById('bm-setsB').value);
+        if (isNaN(sA) || isNaN(sB)) { errEl.textContent = 'Ingresa los sets'; errEl.style.display = 'block'; return; }
+        if (sA === sB) { errEl.textContent = 'Debe haber un ganador'; errEl.style.display = 'block'; return; }
+        ganador = sA > sB ? 'A' : 'B';
+      } else {
+        const rad = document.querySelector('input[name="bm-ganador"]:checked');
+        if (!rad) { errEl.textContent = 'Selecciona el ganador'; errEl.style.display = 'block'; return; }
+        ganador = rad.value; sA = ganador === 'A' ? 1 : 0; sB = ganador === 'B' ? 1 : 0;
+      }
+
+      const idx = bracket.partidos.findIndex(x => x.id === id);
+      bracket.partidos[idx] = { ...p, setsA: sA, setsB: sB, ganador };
+
+      // Calcular campeón si todos los partidos están jugados
+      const tb = {};
+      bracket.equipos.forEach(e => { tb[e] = { pts: 0 }; });
+      bracket.partidos.filter(x => x.ganador).forEach(x => {
+        if (x.ganador === 'A') tb[x.equipoA].pts += 2;
+        else tb[x.equipoB].pts += 2;
+      });
+      const pendientes = bracket.partidos.filter(x => !x.ganador).length;
+      if (pendientes === 0) {
+        bracket.campeon = Object.entries(tb).sort((a, b) => b[1].pts - a[1].pts)[0][0];
+      }
+
+      await guardarPlayoffs(LIGA.id, bracket);
+      modal.style.display = 'none';
+      toast('Resultado guardado ✓');
+      renderTab('playoffs');
+    };
+  };
 }
 
 // ── Finanzas ─────────────────────────────────────────────────
@@ -462,7 +981,6 @@ function renderFinanzas(el) {
   const noms     = equipos.map(e => e.nombre);
   const fixture  = generarFixture(noms);
 
-  // Construir HTML del panel de adelanto por equipo
   const htmlAdelanto = equipos.map((eq, idx) => {
     const n   = eq.nombre;
     const sid = `eq_${idx}`;
@@ -612,13 +1130,12 @@ function renderFinanzas(el) {
   window.confirmarPagoEquipoLiga = async (nombre, sid, jugPend, precioA) => {
     const inp   = document.getElementById(`arb-monto-${sid}`);
     const monto = parseInt(inp?.value);
-    if (!monto || monto < 1) { toast('Ingresa un monto válido','error'); return; }
+    if (!monto || monto < 1) { toast('Ingresa un monto válido', 'error'); return; }
     const eq = equipos.find(e => e.nombre === nombre);
-    if (!eq) { toast('Equipo no encontrado','error'); return; }
+    if (!eq) { toast('Equipo no encontrado', 'error'); return; }
 
     let resto = (eq.arb_saldo || 0) + monto;
 
-    // Aplicar a partidos jugados pendientes primero (orden cronológico)
     const pendientes = partidos.filter(p =>
       !p.es_playoff && p.jugado &&
       ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
@@ -631,7 +1148,6 @@ function renderFinanzas(el) {
       resto -= precioA;
     }
 
-    // Guardar saldo restante como crédito para futuros
     await actualizarEquipo(eq.id, { arb_saldo: resto });
     toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
     renderTab('finanzas');
@@ -711,8 +1227,6 @@ function renderConfigTab(el) {
       <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
         Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
       </p>
-
-      <!-- Alias personalizado -->
       <div style="margin-bottom:1.2rem">
         <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.4rem">
           Nombre corto personalizado
@@ -735,8 +1249,6 @@ function renderConfigTab(el) {
         <div id="alias-error" class="auth-error" style="display:none;margin-top:.4rem"></div>
         <div id="alias-ok" style="display:none;color:var(--green);font-size:.82rem;margin-top:.4rem"></div>
       </div>
-
-      <!-- Código aleatorio -->
       <div style="border-top:1px solid var(--border);padding-top:1rem">
         <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.6rem">
           Código de respaldo (siempre funciona)
@@ -789,7 +1301,6 @@ function renderConfigTab(el) {
     toast('Formato guardado ✓');
   };
 
-  // Guardar alias
   el.querySelector('#btn-guardar-alias').onclick = async () => {
     const aliasInp = el.querySelector('#input-alias');
     const aliasErr = el.querySelector('#alias-error');
@@ -827,19 +1338,19 @@ function renderConfigTab(el) {
   };
 
   el.querySelector('#btn-copiar-link').onclick = () => {
-    const link = `${location.origin}/?liga=${LIGA.codigo}`;
+    const link = `${location.origin}/?liga=${LIGA.alias || LIGA.codigo}`;
     navigator.clipboard?.writeText(link).then(()=>toast('Link copiado ✓')).catch(()=>toast(link));
   };
 
   el.querySelector('#btn-invitar').onclick = async () => {
     const email = el.querySelector('#invite-email').value.trim();
-    if (!email) { toast('Escribe un correo','error'); return; }
+    if (!email) { toast('Escribe un correo', 'error'); return; }
     try {
       await invitarCoAdmin(LIGA.id, email);
       el.querySelector('#invite-email').value = '';
       cargarCoAdmins(el.querySelector('#lista-coadmins'));
       toast('Co-admin invitado ✓');
-    } catch(err) { toast(err.message,'error'); }
+    } catch(err) { toast(err.message, 'error'); }
   };
 
   async function cargarCoAdmins(cont) {
