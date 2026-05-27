@@ -515,7 +515,7 @@ function renderFinanzas(el) {
       <div id="panel-adelanto-equipos">
         ${equipos.map(eq => {
           const n = eq.nombre;
-          const sid = n.replace(/\W+/g,'_');
+          const sid = 'eq_' + equipos.indexOf(eq);
           const jugPendA = norm.filter(p=>p.equipo_a===n&&!p.pago_arb_a).length;
           const jugPendB = norm.filter(p=>p.equipo_b===n&&!p.pago_arb_b).length;
           const totalJug = jugPendA + jugPendB;
