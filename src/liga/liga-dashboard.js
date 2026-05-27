@@ -2,7 +2,7 @@
 //  liga-dashboard.js — Vista del organizador de su liga
 // ============================================================
 import { sb } from '../lib/supabase.js';
-import { currentProfile, logout } from '../auth/auth.js';
+import { logout } from '../auth/auth.js';
 import {
   getLigaById, getMisLigas, actualizarLiga, renovarCodigo,
   getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
@@ -13,15 +13,23 @@ import {
 } from '../lib/db.js';
 import { toast, esc, formatFecha, confirmar } from '../lib/ui.js';
 
-// Estado de la vista actual
-let LIGA    = null;   // objeto liga activo
-let equipos = [];
+let LIGA     = null;
+let equipos  = [];
 let partidos = [];
+
+// Obtener perfil actual de forma segura
+async function getPerfil() {
+  const mod = await import('../auth/auth.js');
+  return mod.currentProfile;
+}
 
 // ════════════════════════════════════════════════════════════
 //  ENTRADA PRINCIPAL
 // ════════════════════════════════════════════════════════════
 export async function renderOrgPanel(container) {
+  const perfil = await getPerfil();
+  if (!perfil) { container.innerHTML = '<p class="empty">Error de sesión. Recarga la página.</p>'; return; }
+
   container.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
@@ -30,7 +38,7 @@ export async function renderOrgPanel(container) {
           <span class="topbar-title" id="topbar-liga-nombre">Mis ligas</span>
         </div>
         <div class="topbar-right">
-          <span class="topbar-user">${esc(currentProfile.nombre || currentProfile.email)}</span>
+          <span class="topbar-user">${esc(perfil.nombre || perfil.email)}</span>
           <button class="btn secondary small" id="btn-logout-org">Salir</button>
         </div>
       </header>
@@ -39,7 +47,7 @@ export async function renderOrgPanel(container) {
 
   container.querySelector('#btn-logout-org').addEventListener('click', logout);
 
-  const misLigas = await getMisLigas(currentProfile.id);
+  const misLigas = await getMisLigas(perfil.id);
 
   if (!misLigas.length) {
     renderSinLigas(container.querySelector('#org-main'));
@@ -95,7 +103,10 @@ function renderSelectorLigas(ligas, el) {
 
 // ── Formulario crear liga ────────────────────────────────────
 async function renderFormCrearLiga(el) {
-  const total = await contarLigasDeUsuario(currentProfile.id);
+  const perfil = await getPerfil();
+  if (!perfil) { toast('Error de sesión, recarga','error'); return; }
+
+  const total = await contarLigasDeUsuario(perfil.id);
   if (total >= 2) {
     el.innerHTML = `
       <div class="empty-state">
@@ -114,7 +125,7 @@ async function renderFormCrearLiga(el) {
       const msg = el.querySelector('#pet-mensaje').value.trim();
       if (!msg) { toast('Escribe un mensaje','error'); return; }
       try {
-        await enviarPeticion(currentProfile.id, msg);
+        await enviarPeticion(perfil.id, msg);
         toast('Petición enviada ✓');
         renderOrgPanel(document.querySelector('#app'));
       } catch(err) { toast(err.message,'error'); }
@@ -150,10 +161,11 @@ async function renderFormCrearLiga(el) {
     const errEl  = el.querySelector('#crear-error');
     errEl.style.display = 'none';
     try {
-      const { currentProfile: cp } = await import('../auth/auth.js');
-        const liga = await crearLiga({
+      const p = await getPerfil();
+      if (!p?.id) throw new Error('Sesión no válida, recarga la página');
+      const liga = await crearLiga({
         nombre, temporada: temp,
-        ownerId: cp.id,
+        ownerId: p.id,
         config: {}, reglas: [], playoffsCfg: {}
       });
       toast('Liga creada ✓');
@@ -173,7 +185,8 @@ async function abrirLiga(ligaData, el) {
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
 
-  document.querySelector('#topbar-liga-nombre').textContent = LIGA.nombre;
+  const topbar = document.querySelector('#topbar-liga-nombre');
+  if (topbar) topbar.textContent = LIGA.nombre;
 
   el.innerHTML = `
     <nav class="tab-nav" id="liga-nav">
@@ -198,9 +211,7 @@ async function abrirLiga(ligaData, el) {
   renderTab('tabla', el.querySelector('#liga-content'));
 }
 
-// ── Despachar tabs ───────────────────────────────────────────
 async function renderTab(tab, el) {
-  // Refrescar datos en cada cambio de tab
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
   LIGA     = await getLigaById(LIGA.id);
@@ -209,12 +220,12 @@ async function renderTab(tab, el) {
   if (tab === 'fixture')  renderFixture(el);
   if (tab === 'partidos') renderPartidos(el);
   if (tab === 'equipos')  renderEquiposTab(el);
-  if (tab === 'playoffs') await renderPlayoffsTab(el);
+  if (tab === 'playoffs') renderPlayoffsTab(el);
   if (tab === 'finanzas') renderFinanzas(el);
   if (tab === 'config')   renderConfigTab(el);
 }
 
-// ── Tabla de posiciones ──────────────────────────────────────
+// ── Tabla ────────────────────────────────────────────────────
 function renderTabla(el) {
   const cfg      = LIGA.config || {};
   const usarPts  = cfg.usarPuntos  !== false;
@@ -248,9 +259,9 @@ function renderTabla(el) {
 
 // ── Fixture ──────────────────────────────────────────────────
 function renderFixture(el) {
-  const cfg    = LIGA.config || {};
+  const cfg     = LIGA.config || {};
   const vueltas = cfg.vueltas || 2;
-  const noms   = equipos.map(e => e.nombre);
+  const noms    = equipos.map(e => e.nombre);
   const fixture = generarFixture(noms);
 
   let html = `<h2>Fixture</h2>`;
@@ -264,12 +275,11 @@ function renderFixture(el) {
         ((p.equipo_a===eA&&p.equipo_b===eB)||(p.equipo_a===eB&&p.equipo_b===eA))
       );
       const jugado = partido?.jugado;
-      const score  = jugado ? `${partido.sets_a}:${partido.sets_b}` : 'vs';
       html += `<div class="fixture-item ${jugado?'jugado':''}">
         <span class="badge ${v===1?'pending':'done'}">V${v}</span>
         <div class="fixture-teams">
           <span>${esc(eA)}</span>
-          <span class="fixture-vs">${score}</span>
+          <span class="fixture-vs">${jugado ? `${partido.sets_a}:${partido.sets_b}` : 'vs'}</span>
           <span>${esc(eB)}</span>
         </div>
         ${partido?.fecha ? `<span class="fixture-date">${formatFecha(partido.fecha)}</span>` : ''}
@@ -326,7 +336,6 @@ function renderPartidos(el) {
         </div>
       </form>
     </div>
-
     <h2 style="margin-top:2rem">Partidos <span>Registrados</span></h2>
     <div id="lista-partidos-liga">
       ${!norm.length ? '<p class="empty">No hay partidos aún.</p>' :
@@ -343,26 +352,22 @@ function renderPartidos(el) {
             <span class="badge win">🏆 ${esc(ganN)}</span>
             <button class="btn danger small" onclick="eliminarPartidoLiga('${p.id}')">Eliminar</button>
           </div>`;
-        }).join('')
-      }
+        }).join('')}
     </div>`;
 
-  // Construir sets form
   buildSetsFormLiga(el.querySelector('#p-sets-container'), reglas, usarSets);
 
-  // Submit
   el.querySelector('#form-partido-liga').addEventListener('submit', async e => {
     e.preventDefault();
-    const eA    = el.querySelector('#p-eqA').value;
-    const eB    = el.querySelector('#p-eqB').value;
+    const eA     = el.querySelector('#p-eqA').value;
+    const eB     = el.querySelector('#p-eqB').value;
     const vuelta = parseInt(el.querySelector('#p-vuelta').value);
     const fecha  = el.querySelector('#p-fecha').value;
-    if (!eA || !eB)   { toast('Selecciona ambos equipos','error'); return; }
-    if (eA === eB)    { toast('Los equipos deben ser diferentes','error'); return; }
-    if (!fecha)       { toast('La fecha es obligatoria','error'); return; }
+    if (!eA || !eB) { toast('Selecciona ambos equipos','error'); return; }
+    if (eA === eB)  { toast('Los equipos deben ser diferentes','error'); return; }
+    if (!fecha)     { toast('La fecha es obligatoria','error'); return; }
 
     let sets=[], sA=0, sB=0, ganador=null;
-
     if (!usarSets) {
       const rad = el.querySelector('input[name="ganador-simple"]:checked');
       if (!rad) { toast('Selecciona quién ganó','error'); return; }
@@ -415,13 +420,12 @@ function renderEquiposTab(el) {
           <div class="fixture-item">
             <span style="font-weight:600;flex:1">${esc(e.nombre)}</span>
             <button class="btn danger small" onclick="eliminarEquipoLiga('${e.id}')">Eliminar</button>
-          </div>`).join('')
-      }
+          </div>`).join('')}
     </div>`;
 
   el.querySelector('#btn-add-equipo').onclick = async () => {
-    const inp  = el.querySelector('#nuevo-equipo');
-    const nom  = inp.value.trim();
+    const inp = el.querySelector('#nuevo-equipo');
+    const nom = inp.value.trim();
     if (!nom) { toast('Escribe un nombre','error'); return; }
     if (equipos.some(e=>e.nombre.toLowerCase()===nom.toLowerCase())) { toast('Nombre duplicado','error'); return; }
     await agregarEquipo(LIGA.id, nom);
@@ -431,20 +435,20 @@ function renderEquiposTab(el) {
   };
 
   window.eliminarEquipoLiga = async id => {
-    if (!confirmar('¿Eliminar este equipo? Se eliminarán sus partidos.')) return;
+    if (!confirmar('¿Eliminar este equipo?')) return;
     await eliminarEquipo(id);
     renderTab('equipos', el);
     toast('Equipo eliminado');
   };
 }
 
-// ── Playoffs (stub para Fase 2) ───────────────────────────────
-async function renderPlayoffsTab(el) {
+// ── Playoffs ─────────────────────────────────────────────────
+function renderPlayoffsTab(el) {
   el.innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">🏆</div>
       <h2>Playoffs</h2>
-      <p class="muted">Esta sección estará completa en la próxima actualización.</p>
+      <p class="muted">Disponible en la próxima actualización.</p>
     </div>`;
 }
 
@@ -455,7 +459,6 @@ function renderFinanzas(el) {
   const precioA  = cfg.precioArbitraje   ?? 120;
   const permitirAdelanto = cfg.permitirAdelantoArb !== false;
   const norm     = partidos.filter(p=>!p.es_playoff&&p.jugado);
-
   const inscPag  = equipos.filter(e=>e.inscripcion_pagada).length;
   const inscPend = equipos.length - inscPag;
   const arbCob   = norm.reduce((s,p)=>s+(p.pago_arb_a?precioA:0)+(p.pago_arb_b?precioA:0),0);
@@ -463,8 +466,6 @@ function renderFinanzas(el) {
 
   el.innerHTML = `
     <h2>💰 <span>Finanzas</span></h2>
-
-    <!-- Resumen -->
     <div class="resumen-financiero">
       <div class="resumen-fin-grid">
         <div class="resumen-fin-card total">
@@ -483,8 +484,6 @@ function renderFinanzas(el) {
         </div>
       </div>
     </div>
-
-    <!-- Inscripciones -->
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">📋 Inscripciones</p>
       ${equipos.map(e=>`
@@ -496,16 +495,8 @@ function renderFinanzas(el) {
             : `<button class="arb-pill-btn" onclick="pagarInscripcionLiga('${e.id}')">Marcar pagado</button>`}
         </div>`).join('')}
     </div>
-
-    <!-- Arbitrajes por partido -->
     <div class="card" style="margin-top:1.2rem">
-      <p class="card-subtitle">🏐 Arbitrajes por partido</p>
-      ${renderArbEquipos(equipos, partidos, precioA, permitirAdelanto)}
-    </div>
-
-    <!-- Arbitraje por partido individual -->
-    <div class="card" style="margin-top:1.2rem">
-      <p class="card-subtitle">Detalle por partido</p>
+      <p class="card-subtitle">Detalle de arbitrajes por partido</p>
       ${!norm.length ? '<p class="muted">Sin partidos.</p>' :
         norm.sort((a,b)=>a.vuelta-b.vuelta).map(p=>`
           <div class="fixture-item" style="flex-direction:column;align-items:flex-start;gap:.4rem">
@@ -517,14 +508,12 @@ function renderFinanzas(el) {
             <div class="arb-row" style="width:100%">
               <div class="arb-pill ${p.pago_arb_a?'pagado':'pendiente'}">
                 <span class="arb-pill-nom">${esc(p.equipo_a)}</span>
-                ${p.pago_arb_a
-                  ? '<span class="arb-pill-estado">✓ Pagado</span>'
+                ${p.pago_arb_a ? '<span class="arb-pill-estado">✓ Pagado</span>'
                   : `<button class="arb-pill-btn" onclick="pagarArbPartido('${p.id}','pago_arb_a')">Pagar $${precioA}</button>`}
               </div>
               <div class="arb-pill ${p.pago_arb_b?'pagado':'pendiente'}">
                 <span class="arb-pill-nom">${esc(p.equipo_b)}</span>
-                ${p.pago_arb_b
-                  ? '<span class="arb-pill-estado">✓ Pagado</span>'
+                ${p.pago_arb_b ? '<span class="arb-pill-estado">✓ Pagado</span>'
                   : `<button class="arb-pill-btn" onclick="pagarArbPartido('${p.id}','pago_arb_b')">Pagar $${precioA}</button>`}
               </div>
             </div>
@@ -534,96 +523,23 @@ function renderFinanzas(el) {
   window.pagarInscripcionLiga = async id => {
     if (!confirmar('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
-    renderTab('finanzas', el);
-    toast('Inscripción registrada ✓');
+    renderTab('finanzas', el); toast('Inscripción registrada ✓');
   };
 
   window.pagarArbPartido = async (id, campo) => {
     await actualizarPartido(id, { [campo]: true });
-    renderTab('finanzas', el);
-    toast('Arbitraje registrado ✓');
+    renderTab('finanzas', el); toast('Arbitraje registrado ✓');
   };
-
-  window.abrirPagoEquipo = (nombre) => {
-    const formId = `arb-form-${nombre.replace(/\s+/g,'_')}`;
-    const form   = document.getElementById(formId);
-    if (form) form.style.display = form.style.display==='none'?'block':'none';
-  };
-
-  window.confirmarPagoEquipoLiga = async (nombre) => {
-    const formId = `arb-form-${nombre.replace(/\s+/g,'_')}`;
-    const inp    = document.getElementById(`arb-monto-${nombre.replace(/\s+/g,'_')}`);
-    const monto  = parseInt(inp?.value);
-    if (!monto||monto<1) { toast('Ingresa un monto válido','error'); return; }
-
-    const eq    = equipos.find(e=>e.nombre===nombre);
-    const saldo = (eq?.arb_saldo||0) + monto;
-    let resto   = saldo;
-
-    // Aplicar a partidos pendientes
-    const pendientes = partidos.filter(p=>
-      !p.es_playoff&&p.jugado&&
-      ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
-    ).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-
-    for (const p of pendientes) {
-      if (resto < precioA) break;
-      const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
-      await actualizarPartido(p.id, { [campo]: true });
-      resto -= precioA;
-    }
-    // Guardar saldo restante
-    await actualizarEquipo(eq.id, { arb_saldo: resto });
-    toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto>0?` — Saldo: $${resto.toLocaleString('es-MX')}`:''}`);
-    renderTab('finanzas', el);
-  };
-}
-
-function renderArbEquipos(equipos, partidos, precioA, permitirAdelanto) {
-  if (!permitirAdelanto) return '';
-  const norm = partidos.filter(p=>!p.es_playoff&&p.jugado);
-  return `<div style="margin-bottom:.5rem">
-    <p class="muted" style="font-size:.8rem;margin-bottom:.8rem">Registra un pago global por equipo (puede ser parcial).</p>
-    ${equipos.map(eq=>{
-      const n   = eq.nombre;
-      const sid = n.replace(/\s+/g,'_');
-      const jugPend = norm.filter(p=>
-        (p.equipo_a===n&&!p.pago_arb_a)||(p.equipo_b===n&&!p.pago_arb_b)
-      ).length;
-      const saldo = eq.arb_saldo||0;
-      const neto  = Math.max(0, jugPend*precioA - saldo);
-      return `<div class="arb-equipo-row">
-        <div class="arb-equipo-nom">${esc(n)}</div>
-        <div class="arb-equipo-detalle">
-          ${jugPend>0?`<span class="muted" style="font-size:.8rem">⚠ ${jugPend} partido${jugPend!==1?'s':''} pendiente${jugPend!==1?'s':''} ($${(jugPend*precioA).toLocaleString('es-MX')})</span>`:''}
-          ${saldo>0?`<span style="color:#10b981;font-size:.8rem">Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}
-          ${neto===0&&jugPend===0?'<span class="badge win">✓ Al corriente</span>':'<strong>Pendiente neto: $'+neto.toLocaleString('es-MX')+'</strong>'}
-        </div>
-        ${neto>0||jugPend>0?`
-        <div class="arb-equipo-acciones">
-          <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${esc(n)}')">💸 Registrar pago</button>
-        </div>
-        <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
-          <input type="number" id="arb-monto-${sid}" value="${neto}" min="1" style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
-          <button class="btn" style="font-size:.8rem" onclick="confirmarPagoEquipoLiga('${esc(n)}')">✓ Confirmar</button>
-          <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${esc(n)}')">Cancelar</button>
-          <p class="muted" style="font-size:.74rem;margin-top:.3rem">Puedes pagar cualquier monto parcial.</p>
-        </div>`:''}
-      </div>`;
-    }).join('')}
-  </div>`;
 }
 
 // ── Config ───────────────────────────────────────────────────
 function renderConfigTab(el) {
-  const cfg = { ...{ nombre:'', temporada:'', vueltas:2, usarPuntos:true, usarSets:true,
+  const cfg = { nombre:'', temporada:'', vueltas:2, usarPuntos:true, usarSets:true,
     ptsVictoria:2, ptsBono:1, ptsDerota:0, precioInscripcion:500, precioArbitraje:120,
-    colorAcento:'#f59e0b', permitirAdelantoArb:true }, ...(LIGA.config||{}) };
+    colorAcento:'#f59e0b', permitirAdelantoArb:true, ...(LIGA.config||{}) };
 
   el.innerHTML = `
     <h2>⚙ <span>Configuración</span></h2>
-
-    <!-- Identidad -->
     <div class="card">
       <p class="card-subtitle">🏷 Liga</p>
       <form id="form-cfg-liga">
@@ -656,18 +572,11 @@ function renderConfigTab(el) {
         </div>
         <label class="check-row cfg-toggle-row">
           <input type="checkbox" id="cfg-adelanto" ${cfg.permitirAdelantoArb!==false?'checked':''}>
-          <span>
-            <strong>Permitir adelanto de arbitrajes</strong>
-            <small>Activa el panel de pago global por equipo en Finanzas.</small>
-          </span>
+          <span><strong>Permitir adelanto de arbitrajes</strong></span>
         </label>
-        <div class="flex mt1">
-          <button type="submit" class="btn">💾 Guardar</button>
-        </div>
+        <div class="flex mt1"><button type="submit" class="btn">💾 Guardar</button></div>
       </form>
     </div>
-
-    <!-- Formato -->
     <div class="card">
       <p class="card-subtitle">🏐 Formato del partido</p>
       <label class="check-row cfg-toggle-row">
@@ -676,32 +585,24 @@ function renderConfigTab(el) {
       </label>
       <label class="check-row cfg-toggle-row">
         <input type="checkbox" id="cfg-pts" ${cfg.usarPuntos?'checked':''}>
-        <span><strong>Columna de puntos (PTS)</strong><small>Desactiva para clasificar solo por PG.</small></span>
+        <span><strong>Columna de puntos (PTS)</strong></span>
       </label>
-      <div class="form-row cfg-pts-row" style="margin-top:.8rem">
+      <div class="form-row" style="margin-top:.8rem">
         <div class="form-group"><label>Pts. victoria</label><input type="number" id="cfg-ptsV" value="${cfg.ptsVictoria}" min="0" style="max-width:80px"></div>
         <div class="form-group"><label>Bono derrota</label><input type="number" id="cfg-ptsB" value="${cfg.ptsBono}" min="0" style="max-width:80px"></div>
         <div class="form-group"><label>Pts. derrota</label><input type="number" id="cfg-ptsD" value="${cfg.ptsDerota}" min="0" style="max-width:80px"></div>
       </div>
-      <div class="flex mt1">
-        <button class="btn" id="btn-guardar-formato">💾 Guardar formato</button>
-      </div>
+      <div class="flex mt1"><button class="btn" id="btn-guardar-formato">💾 Guardar formato</button></div>
     </div>
-
-    <!-- Código público -->
     <div class="card">
       <p class="card-subtitle">🔗 Código de acceso público</p>
-      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">
-        Comparte este código para que cualquiera pueda ver la tabla de tu liga sin iniciar sesión.
-      </p>
+      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">Comparte este código para que cualquiera vea tu liga sin iniciar sesión.</p>
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
         <code class="codigo-chip" style="font-size:1.4rem;padding:.5rem 1.2rem">${LIGA.codigo}</code>
         <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar código</button>
         <button class="btn secondary" id="btn-copiar-link">📋 Copiar link</button>
       </div>
     </div>
-
-    <!-- Co-admins -->
     <div class="card">
       <p class="card-subtitle">👥 Co-administradores</p>
       <div id="lista-coadmins"></div>
@@ -713,53 +614,46 @@ function renderConfigTab(el) {
 
   cargarCoAdmins(el.querySelector('#lista-coadmins'));
 
-  // Guardar identidad
   el.querySelector('#form-cfg-liga').onsubmit = async e => {
     e.preventDefault();
     const nuevoCfg = { ...cfg,
-      nombre:             el.querySelector('#cfg-nom').value.trim(),
-      temporada:          el.querySelector('#cfg-temp').value.trim(),
-      vueltas:            parseInt(el.querySelector('#cfg-vueltas').value),
-      precioInscripcion:  parseInt(el.querySelector('#cfg-pinsc').value)||500,
-      precioArbitraje:    parseInt(el.querySelector('#cfg-parb').value)||120,
+      nombre: el.querySelector('#cfg-nom').value.trim(),
+      temporada: el.querySelector('#cfg-temp').value.trim(),
+      vueltas: parseInt(el.querySelector('#cfg-vueltas').value),
+      precioInscripcion: parseInt(el.querySelector('#cfg-pinsc').value)||500,
+      precioArbitraje: parseInt(el.querySelector('#cfg-parb').value)||120,
       permitirAdelantoArb: el.querySelector('#cfg-adelanto').checked,
     };
     await actualizarLiga(LIGA.id, { nombre: nuevoCfg.nombre, temporada: nuevoCfg.temporada, config: nuevoCfg });
     LIGA.config = nuevoCfg; LIGA.nombre = nuevoCfg.nombre;
-    document.querySelector('#topbar-liga-nombre').textContent = nuevoCfg.nombre;
+    const t = document.querySelector('#topbar-liga-nombre');
+    if (t) t.textContent = nuevoCfg.nombre;
     toast('Configuración guardada ✓');
   };
 
-  // Guardar formato
   el.querySelector('#btn-guardar-formato').onclick = async () => {
     const nuevoCfg = { ...cfg,
-      usarSets:    el.querySelector('#cfg-sets').checked,
-      usarPuntos:  el.querySelector('#cfg-pts').checked,
+      usarSets: el.querySelector('#cfg-sets').checked,
+      usarPuntos: el.querySelector('#cfg-pts').checked,
       ptsVictoria: parseInt(el.querySelector('#cfg-ptsV').value)||2,
-      ptsBono:     parseInt(el.querySelector('#cfg-ptsB').value)||0,
-      ptsDerota:   parseInt(el.querySelector('#cfg-ptsD').value)||0,
+      ptsBono: parseInt(el.querySelector('#cfg-ptsB').value)||0,
+      ptsDerota: parseInt(el.querySelector('#cfg-ptsD').value)||0,
     };
     await actualizarLiga(LIGA.id, { config: nuevoCfg });
-    LIGA.config = nuevoCfg;
-    toast('Formato guardado ✓');
+    LIGA.config = nuevoCfg; toast('Formato guardado ✓');
   };
 
-  // Renovar código
   el.querySelector('#btn-renovar-codigo').onclick = async () => {
-    if (!confirmar('¿Renovar el código? El código anterior dejará de funcionar.')) return;
+    if (!confirmar('¿Renovar el código? El anterior dejará de funcionar.')) return;
     const nuevo = await renovarCodigo(LIGA.id);
-    LIGA.codigo = nuevo;
-    renderTab('config', el);
-    toast('Código renovado ✓');
+    LIGA.codigo = nuevo; renderTab('config', el); toast('Código renovado ✓');
   };
 
-  // Copiar link
   el.querySelector('#btn-copiar-link').onclick = () => {
     const link = `${location.origin}/?liga=${LIGA.codigo}`;
     navigator.clipboard?.writeText(link).then(()=>toast('Link copiado ✓')).catch(()=>toast(link));
   };
 
-  // Invitar
   el.querySelector('#btn-invitar').onclick = async () => {
     const email = el.querySelector('#invite-email').value.trim();
     if (!email) { toast('Escribe un correo','error'); return; }
@@ -779,19 +673,17 @@ function renderConfigTab(el) {
         <span class="badge ${m.role==='owner'?'win':'pending'}">${m.role==='owner'?'Propietario':'Co-admin'}</span>
         ${m.role!=='owner'?`<button class="btn danger small" onclick="quitarCoAdmin('${m.id}')">Quitar</button>`:''}
       </div>`).join('');
-
     window.quitarCoAdmin = async id => {
       if (!confirmar('¿Quitar este co-admin?')) return;
       const m = miembros.find(x=>x.id===id);
       if (m) await quitarMiembro(LIGA.id, m.user_id);
-      cargarCoAdmins(cont);
-      toast('Co-admin eliminado');
+      cargarCoAdmins(cont); toast('Co-admin eliminado');
     };
   }
 }
 
 // ════════════════════════════════════════════════════════════
-//  HELPERS DE CÁLCULO
+//  HELPERS
 // ════════════════════════════════════════════════════════════
 const REGLAS_DEFAULT = [
   { nombre:'Set 1', puntos:25, diferencia:2, usarPuntosSet:true },
@@ -808,31 +700,28 @@ function generarFixture(noms) {
 }
 
 function calcularTabla(equipos, partidos, cfg) {
-  const usarPts  = cfg.usarPuntos  !== false;
-  const usarSets = cfg.usarSets    !== false;
-  const ptsV     = cfg.ptsVictoria ?? 2;
-  const ptsB     = cfg.ptsBono     ?? 1;
-  const ptsD     = cfg.ptsDerota   ?? 0;
-
+  const usarPts  = cfg.usarPuntos !== false;
+  const usarSets = cfg.usarSets   !== false;
+  const ptsV = cfg.ptsVictoria ?? 2;
+  const ptsB = cfg.ptsBono     ?? 1;
+  const ptsD = cfg.ptsDerota   ?? 0;
   const t = {};
-  equipos.forEach(e => { t[e.nombre] = {equipo:e.nombre,pj:0,pg:0,pp:0,sg:0,sp:0,pf:0,pc:0,pts:0}; });
-
+  equipos.forEach(e => { t[e.nombre]={equipo:e.nombre,pj:0,pg:0,pp:0,sg:0,sp:0,pts:0}; });
   partidos.filter(p=>p.jugado&&!p.es_playoff).forEach(p => {
-    const a = t[p.equipo_a], b = t[p.equipo_b];
+    const a=t[p.equipo_a], b=t[p.equipo_b];
     if (!a||!b) return;
     a.pj++; b.pj++;
     if (usarSets) { a.sg+=p.sets_a; a.sp+=p.sets_b; b.sg+=p.sets_b; b.sp+=p.sets_a; }
     if (p.ganador==='A') {
       a.pg++; b.pp++;
       if (usarPts) { a.pts+=ptsV; b.pts+=ptsD; if(usarSets&&p.sets_b>0) b.pts+=ptsB; }
-    } else if (p.ganador==='B') {
+    } else {
       b.pg++; a.pp++;
       if (usarPts) { b.pts+=ptsV; a.pts+=ptsD; if(usarSets&&p.sets_a>0) a.pts+=ptsB; }
     }
   });
-
-  return Object.values(t).sort((a,b) => {
-    if (usarPts && b.pts!==a.pts) return b.pts-a.pts;
+  return Object.values(t).sort((a,b)=>{
+    if (usarPts&&b.pts!==a.pts) return b.pts-a.pts;
     if (b.pg!==a.pg) return b.pg-a.pg;
     if (usarSets) return (b.sg-b.sp)-(a.sg-a.sp);
     return 0;
@@ -844,17 +733,17 @@ function buildSetsFormLiga(cont, reglas, usarSets) {
     cont.innerHTML = `<div class="set-block">
       <h4>Resultado</h4>
       <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;cursor:pointer">
-        <input type="radio" name="ganador-simple" value="A"> <span id="lbl-ganA">Equipo A gana</span>
+        <input type="radio" name="ganador-simple" value="A"> Equipo A gana
       </label>
       <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
-        <input type="radio" name="ganador-simple" value="B"> <span id="lbl-ganB">Equipo B gana</span>
+        <input type="radio" name="ganador-simple" value="B"> Equipo B gana
       </label>
     </div>`;
     return;
   }
   cont.innerHTML = reglas.map((r,i) => {
     const idx=i+1, esD=i===reglas.length-1&&reglas.length>1;
-    const conPts = r.usarPuntosSet!==false;
+    const conPts=r.usarPuntosSet!==false;
     return `<div class="set-block" id="bloque-set${idx}">
       <h4>${esc(r.nombre)}${esD?' <small style="color:var(--accent);font-size:.7rem">(Desempate)</small>':''}</h4>
       <div class="set-score">
