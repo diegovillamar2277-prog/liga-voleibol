@@ -28,9 +28,10 @@
 
   <!-- Service Worker para PWA -->
   <script>
+    // Desregistrar service worker para forzar carga fresca
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.unregister());
       });
     }
   </script>
