@@ -9,4 +9,9 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
     autoRefreshToken: true,
     detectSessionInUrl: true
   }
+
+export async function getSupabase() {
+  return sb;
+}
+
 });
