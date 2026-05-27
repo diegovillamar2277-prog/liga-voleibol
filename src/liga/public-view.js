@@ -31,10 +31,7 @@ export async function renderPublicView(container, codigoInicial = '') {
 
   if (codigoInicial) {
     await cargarLiga(codigoInicial, container.querySelector('#pub-body'));
-  } else {
-    // Esperar al siguiente tick para que el DOM esté listo
-    setTimeout(() => adjuntarBuscador(container.querySelector('#pub-body')), 50);
-  }
+  } 
 }
 
 // ── Buscador de liga por código ──────────────────────────────
@@ -47,11 +44,12 @@ function renderBuscador() {
         Ingresa el código de tu liga para ver la tabla de posiciones y resultados.
       </p>
       <div style="display:flex;gap:.6rem">
-        <input type="text" id="input-codigo" placeholder="Ej: VOL-2K7"
-          maxlength="7" style="flex:1;text-transform:uppercase;font-size:1.1rem;letter-spacing:.1rem;
+        <input type="text" id="input-codigo" placeholder="Ej: QMT-X59"
+          maxlength="20" style="flex:1;text-transform:uppercase;font-size:1.1rem;letter-spacing:.1rem;
           padding:.6rem 1rem;border-radius:10px;border:1px solid var(--border);
-          background:var(--bg);color:var(--text)">
-        <button class="btn" id="btn-buscar-liga">Entrar</button>
+          background:var(--bg);color:var(--text)"
+          onkeydown="if(event.key==='Enter') buscarLiga()">
+        <button class="btn" onclick="buscarLiga()">Entrar</button>
       </div>
       <div id="buscar-error" class="auth-error" style="display:none;margin-top:.6rem"></div>
     </div>`;
@@ -88,7 +86,6 @@ async function cargarLiga(codigo, el) {
       errEl.textContent = 'Código no válido. Verifica e intenta de nuevo.';
       errEl.style.display = 'block';
     }
-    adjuntarBuscador(el);
   }
 }
 
@@ -241,23 +238,6 @@ function renderFixturePublico(el, equipos, partidos, cfg) {
   el.innerHTML = html;
 }
 
-// ── Buscador: adjuntar evento ────────────────────────────────
-function adjuntarBuscador(el) {
-  const btn = el.querySelector('#btn-buscar-liga');
-  const inp = el.querySelector('#input-codigo');
-  const err = el.querySelector('#buscar-error');
-  if (!btn) return;
-  btn.onclick = async () => {
-    const codigo = inp.value.trim().toUpperCase();
-    if (!codigo) { err.textContent = 'Escribe el código'; err.style.display='block'; return; }
-    err.style.display = 'none';
-    btn.disabled = true; btn.textContent = 'Buscando…';
-    await cargarLiga(codigo, el);
-    btn.disabled = false; btn.textContent = 'Entrar';
-  };
-  inp.addEventListener('keydown', e => { if (e.key==='Enter') btn.click(); });
-}
-
 // ── Helpers ──────────────────────────────────────────────────
 function generarFixture(noms) {
   const enc = [];
@@ -294,4 +274,19 @@ function calcularTabla(equipos, partidos, cfg) {
     if (usarSets) return (b.sg-b.sp)-(a.sg-a.sp);
     return 0;
   });
+
+  window.buscarLiga = async () => {
+  const inp = document.getElementById('input-codigo');
+  const err = document.getElementById('buscar-error');
+  const btn = document.querySelector('#pub-body button');
+  if (!inp) return;
+  const codigo = inp.value.trim().toUpperCase();
+  if (!codigo) { err.textContent = 'Escribe el código'; err.style.display='block'; return; }
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Buscando…';
+  const el = document.getElementById('pub-body');
+  await cargarLiga(codigo, el);
+  btn.disabled = false; btn.textContent = 'Entrar';
+};
+  
 }
