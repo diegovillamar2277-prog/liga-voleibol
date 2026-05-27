@@ -540,18 +540,19 @@ function renderFinanzas(el) {
               ${futuros>0?`<span class="muted" style="font-size:.8rem">📅 ${futuros} futuro${futuros!==1?'s':''} ($${(futuros*precioA).toLocaleString('es-MX')})</span>`:''}
               ${saldo>0?`<span style="color:#10b981;font-size:.8rem">✓ Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}
               ${montoNeto===0&&totalJug===0?'<span class="badge win">✓ Al corriente</span>':`<strong>Pendiente neto: $${montoNeto.toLocaleString('es-MX')}</strong>`}
+              ${saldo>0?`<span style="color:#10b981;font-size:.8rem">💰 Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}            </div>
             </div>
-            <div class="arb-equipo-acciones">
-              <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">💸 Registrar pago</button>
-            </div>
-            <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
-              <input type="number" id="arb-monto-${sid}" value="${montoNeto||precioA}" min="1"
-                style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
-              <button class="btn" style="font-size:.8rem" onclick="confirmarPagoEquipoLiga('${esc(n)}','${sid}',${totalJug},${precioA})">✓ Confirmar</button>
-              <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">Cancelar</button>
-              <p class="muted" style="font-size:.74rem;margin-top:.3rem">Puedes pagar cualquier monto parcial — el resto queda como saldo a favor.</p>
-            </div>
-          </div>`;
+          <div class="arb-equipo-acciones">
+            <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">💸 Registrar pago</button>
+          </div>
+          <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
+            <input type="number" id="arb-monto-${sid}" value="${precioA}" min="1"
+              style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
+            <button class="btn" style="font-size:.8rem" onclick="confirmarPagoEquipoLiga('${esc(n)}','${sid}',${totalJug},${precioA})">✓ Confirmar</button>
+            <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">Cancelar</button>
+            <p class="muted" style="font-size:.74rem;margin-top:.3rem">Puedes pagar cualquier monto — el sobrante queda como saldo a favor.</p>
+          </div>
+        </div>`;
         }).join('')}
       </div>
     </div>` : ''}
