@@ -2,20 +2,21 @@
 //  db.js — Capa de acceso a datos (Supabase)
 // ============================================================
 import { sb } from '../lib/supabase.js';
-import { currentProfile } from '../auth/auth.js';
 
 // ════════════════════════════════════════════════════════════
 //  LIGAS
 // ════════════════════════════════════════════════════════════
 
 export async function getLigaByCodigo(codigo) {
+  const q = codigo.trim();
+  // Buscar por alias primero, luego por código aleatorio
   const { data, error } = await sb
     .from('leagues')
     .select('*')
-    .eq('codigo', codigo.toUpperCase())
+    .or(`alias.eq.${q.toLowerCase()},codigo.eq.${q.toUpperCase()}`)
     .eq('activa', true)
     .single();
-  if (error) throw new Error('Liga no encontrada');
+  if (error || !data) throw new Error('Liga no encontrada');
   return data;
 }
 
@@ -48,7 +49,6 @@ export async function getTodasLigas() {
 }
 
 export async function crearLiga({ nombre, temporada, ownerId, config, reglas, playoffsCfg }) {
-  // Generar código único
   const { data: codigoData } = await sb.rpc('generar_codigo_liga');
   const codigo = codigoData;
 
@@ -58,6 +58,7 @@ export async function crearLiga({ nombre, temporada, ownerId, config, reglas, pl
       nombre,
       temporada: temporada || '',
       codigo,
+      alias: null,
       owner_id: ownerId,
       config:       config       || {},
       reglas:       reglas       || [],
@@ -67,7 +68,6 @@ export async function crearLiga({ nombre, temporada, ownerId, config, reglas, pl
     .single();
   if (error) throw new Error('Error al crear liga: ' + error.message);
 
-  // Agregar al owner como miembro
   await sb.from('league_members').insert({
     league_id: liga.id,
     user_id:   ownerId,
@@ -89,6 +89,27 @@ export async function renovarCodigo(ligaId) {
   const { data: codigoData } = await sb.rpc('generar_codigo_liga');
   await actualizarLiga(ligaId, { codigo: codigoData });
   return codigoData;
+}
+
+export async function verificarAlias(alias, ligaId) {
+  const { data } = await sb
+    .from('leagues')
+    .select('id')
+    .eq('alias', alias.toLowerCase())
+    .neq('id', ligaId)
+    .single();
+  return !!data; // true = ya existe
+}
+
+export async function actualizarAlias(ligaId, alias) {
+  const limpio = alias.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (!limpio) throw new Error('Alias inválido');
+  if (limpio.length < 3) throw new Error('El alias debe tener al menos 3 caracteres');
+  if (limpio.length > 20) throw new Error('El alias no puede tener más de 20 caracteres');
+  const ocupado = await verificarAlias(limpio, ligaId);
+  if (ocupado) throw new Error('Ese alias ya está en uso por otra liga');
+  await actualizarLiga(ligaId, { alias: limpio });
+  return limpio;
 }
 
 export async function contarLigasDeUsuario(userId) {
@@ -114,7 +135,6 @@ export async function getMiembros(ligaId) {
 }
 
 export async function invitarCoAdmin(ligaId, email) {
-  // Buscar perfil por email
   const { data: perfil, error: pErr } = await sb
     .from('profiles')
     .select('id')
@@ -220,7 +240,6 @@ export async function getPlayoffs(ligaId) {
 }
 
 export async function guardarPlayoffs(ligaId, data) {
-  // Upsert
   await sb.from('playoffs').upsert(
     { league_id: ligaId, data, updated_at: new Date().toISOString() },
     { onConflict: 'league_id' }
@@ -258,7 +277,7 @@ export async function activarUsuario(userId) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  PETICIONES (más de 2 ligas)
+//  PETICIONES
 // ════════════════════════════════════════════════════════════
 
 export async function enviarPeticion(userId, mensaje) {
