@@ -35,5 +35,22 @@
       });
     }
   </script>
+  <script>
+  window.buscarLiga = async function() {
+    const inp = document.getElementById('input-codigo');
+    const err = document.getElementById('buscar-error');
+    if (!inp) return;
+    const codigo = inp.value.trim().toUpperCase();
+    if (!codigo) {
+      if (err) { err.textContent = 'Escribe el código'; err.style.display = 'block'; }
+      return;
+    }
+    if (err) err.style.display = 'none';
+    const btn = inp.nextElementSibling;
+    if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
+    // Redirigir a URL con código
+    window.location.href = '/?liga=' + codigo;
+  };
+</script>
 </body>
 </html>
