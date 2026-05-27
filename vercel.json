@@ -1,7 +1,6 @@
 {
-  "outputDirectory": ".",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!src|styles|sw|manifest|icons).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -9,6 +8,12 @@
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" },
         { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/src/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store" }
       ]
     }
   ]
