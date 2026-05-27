@@ -1,5 +1,5 @@
 // ============================================================
-//  public-view.js — Vista pública por código o alias de liga
+//  public-view.js — Vista pública por código o alias de liga (Fase 2)
 // ============================================================
 import { esc, formatFecha } from '../lib/ui.js';
 
@@ -8,7 +8,7 @@ export async function renderPublicView(container, codigoInicial = '') {
     <div class="app-shell">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="topbar-logo"></span>
+          <span class="topbar-logo">🏐</span>
           <span class="topbar-title" id="pub-liga-nombre">Liga Voleibol</span>
         </div>
         <div class="topbar-right">
@@ -33,14 +33,14 @@ export async function renderPublicView(container, codigoInicial = '') {
 function renderBuscador() {
   return `
     <div class="empty-state" style="max-width:440px;margin:4rem auto;padding:2rem">
-      <div class="empty-icon"></div>
+      <div class="empty-icon">🏐</div>
       <h2>Ver mi liga</h2>
       <p class="muted" style="margin-bottom:1.5rem">
         Ingresa el código o nombre corto de tu liga.
       </p>
       <div style="display:flex;gap:.6rem">
         <input type="text" id="input-codigo"
-          placeholder="Ej: codigo o nombre-corto"
+          placeholder="Ej: lachona o QMT-X59"
           maxlength="20"
           style="flex:1;font-size:1rem;padding:.65rem 1rem;border-radius:10px;
           border:1px solid var(--border);background:var(--bg);color:var(--text)"
@@ -61,7 +61,6 @@ async function cargarLiga(codigo) {
       'sb_publishable_ks-bCTiUUmxtf-FJuiL1_g_hJhUlvQy'
     );
 
-    // Buscar por alias (minúsculas) o por código (mayúsculas)
     const q = codigo.trim();
     const { data: liga, error } = await client
       .from('leagues')
@@ -72,15 +71,18 @@ async function cargarLiga(codigo) {
 
     if (error || !liga) throw new Error('no encontrada');
 
-    const [{ data: equipos }, { data: partidos }] = await Promise.all([
+    const [{ data: equipos }, { data: partidos }, playoffsResult] = await Promise.all([
       client.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
-      client.from('matches').select('*').eq('league_id', liga.id).order('fecha')
+      client.from('matches').select('*').eq('league_id', liga.id).order('fecha'),
+      client.from('playoffs').select('*').eq('league_id', liga.id).single(),
     ]);
+
+    const playoffsData = playoffsResult?.data?.data || null;
 
     const nombreEl = document.querySelector('#pub-liga-nombre');
     if (nombreEl) nombreEl.textContent = liga.nombre;
 
-    renderLigaPublica(el, liga, equipos || [], partidos || []);
+    renderLigaPublica(el, liga, equipos || [], partidos || [], playoffsData);
   } catch (err) {
     el.innerHTML = renderBuscador();
     const errEl = document.getElementById('buscar-error');
@@ -91,14 +93,17 @@ async function cargarLiga(codigo) {
   }
 }
 
-function renderLigaPublica(el, liga, equipos, partidos) {
+function renderLigaPublica(el, liga, equipos, partidos, playoffsData) {
   const cfg = liga.config || {};
   const identificador = liga.alias || liga.codigo;
+  const tienePlayoffs = !!playoffsData;
+
   el.innerHTML = `
     <nav class="tab-nav">
-      <button data-tab="tabla" class="active">Tabla</button>
-      <button data-tab="partidos">Resultados</button>
-      <button data-tab="fixture">Fixture</button>
+      <button data-tab="tabla"    class="active">Tabla</button>
+      <button data-tab="partidos" >Resultados</button>
+      <button data-tab="fixture"  >Fixture</button>
+      ${tienePlayoffs ? '<button data-tab="playoffs">🏆 Playoffs</button>' : ''}
     </nav>
     <div style="text-align:center;margin:.5rem 0;display:flex;align-items:center;justify-content:center;gap:.6rem;flex-wrap:wrap">
       <code class="codigo-chip" style="font-size:.85rem">${identificador}</code>
@@ -115,6 +120,7 @@ function renderLigaPublica(el, liga, equipos, partidos) {
     if (tab === 'tabla')    renderTablaPublica(content, equipos, partidos, cfg);
     if (tab === 'partidos') renderResultados(content, partidos, cfg);
     if (tab === 'fixture')  renderFixturePublico(content, equipos, partidos, cfg);
+    if (tab === 'playoffs') renderPlayoffsPublico(content, playoffsData, cfg);
   };
 
   el.querySelectorAll('.tab-nav button').forEach(btn => {
@@ -218,6 +224,100 @@ function renderFixturePublico(el, equipos, partidos, cfg) {
   el.innerHTML = html;
 }
 
+// ── Playoffs públicos ────────────────────────────────────────
+function renderPlayoffsPublico(el, bracket, cfg) {
+  if (!bracket) {
+    el.innerHTML = '<p class="empty">Los playoffs aún no han comenzado.</p>';
+    return;
+  }
+
+  if (bracket.formato === 'liguilla') {
+    renderLiguillaPublica(el, bracket);
+    return;
+  }
+
+  // Eliminación directa
+  el.innerHTML = `
+    ${bracket.campeon ? `
+      <div class="po-campeon">
+        <div class="po-campeon-trofeo">🏆</div>
+        <div class="po-campeon-titulo">Campeón</div>
+        <div class="po-campeon-nombre">${esc(bracket.campeon)}</div>
+      </div>` : ''}
+
+    <div class="bracket-wrap bracket-publico">
+      ${bracket.rondas.map(ronda => `
+        <div class="bracket-ronda">
+          <div class="bracket-ronda-nombre">${esc(ronda.nombre)}</div>
+          <div class="bracket-partidos">
+            ${ronda.partidos.map(p => `
+              <div class="bracket-partido ${p.ganador ? 'bracket-partido-jugado' : ''}">
+                <div class="bracket-equipo ${p.ganador === 'A' ? 'bracket-ganador' : ''}">
+                  <span class="bracket-equipo-nom">${p.equipoA ? esc(p.equipoA) : '<span class="muted">Por definir</span>'}</span>
+                  ${p.setsA !== null ? `<span class="bracket-sets">${p.setsA}</span>` : ''}
+                </div>
+                <div class="bracket-vs">vs</div>
+                <div class="bracket-equipo ${p.ganador === 'B' ? 'bracket-ganador' : ''}">
+                  <span class="bracket-equipo-nom">${p.equipoB && p.equipoB !== 'BYE' ? esc(p.equipoB) : p.equipoB === 'BYE' ? '<em class="muted">BYE</em>' : '<span class="muted">Por definir</span>'}</span>
+                  ${p.setsB !== null ? `<span class="bracket-sets">${p.setsB}</span>` : ''}
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderLiguillaPublica(el, bracket) {
+  const tablaLig = {};
+  bracket.equipos.forEach(e => { tablaLig[e] = { equipo: e, pj: 0, pg: 0, pp: 0, pts: 0 }; });
+  bracket.partidos.filter(p => p.ganador).forEach(p => {
+    const a = tablaLig[p.equipoA], b = tablaLig[p.equipoB];
+    if (!a || !b) return;
+    a.pj++; b.pj++;
+    if (p.ganador === 'A') { a.pg++; b.pp++; a.pts += 2; }
+    else { b.pg++; a.pp++; b.pts += 2; }
+  });
+  const tablaOrdenada = Object.values(tablaLig).sort((a, b) => b.pts - a.pts || b.pg - a.pg);
+
+  el.innerHTML = `
+    ${bracket.campeon ? `
+      <div class="po-campeon">
+        <div class="po-campeon-trofeo">🏆</div>
+        <div class="po-campeon-titulo">Campeón de Liguilla</div>
+        <div class="po-campeon-nombre">${esc(bracket.campeon)}</div>
+      </div>` : ''}
+
+    <div class="tabla-wrap" style="margin-bottom:1.2rem">
+      <table class="tabla-pos">
+        <thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PP</th><th>PTS</th></tr></thead>
+        <tbody>
+          ${tablaOrdenada.map((r, i) => `
+            <tr ${i === 0 ? 'class="top-row"' : ''}>
+              <td>${i === 0 ? '🥇' : i + 1}</td>
+              <td>${esc(r.equipo)}</td>
+              <td>${r.pj}</td>
+              <td class="green">${r.pg}</td>
+              <td class="red">${r.pp}</td>
+              <td class="pts-cell">${r.pts}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fixture-list">
+      ${bracket.partidos.map(p => `
+        <div class="fixture-item ${p.ganador ? 'jugado' : ''}">
+          <div class="fixture-teams">
+            <span class="${p.ganador === 'A' ? 'team-win' : ''}">${esc(p.equipoA)}</span>
+            <span class="fixture-vs">${p.ganador ? `${p.setsA}:${p.setsB}` : 'vs'}</span>
+            <span class="${p.ganador === 'B' ? 'team-win' : ''}">${esc(p.equipoB)}</span>
+          </div>
+          ${p.ganador ? `<span class="badge win">🏆 ${esc(p.ganador === 'A' ? p.equipoA : p.equipoB)}</span>` : ''}
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── Helpers ──────────────────────────────────────────────────
 function generarFixture(noms) {
   const enc = [];
   for (let i=0; i<noms.length; i++)
