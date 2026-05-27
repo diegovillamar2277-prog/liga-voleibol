@@ -1,7 +1,7 @@
 // ============================================================
 //  sw.js — Service Worker (PWA offline básico)
 // ============================================================
-const CACHE   = 'liga-vol-v1';
+const CACHE = 'liga-vol-v3';
 const PRECACHE = [
   '/',
   '/index.html',
