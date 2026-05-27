@@ -8,7 +8,7 @@ export async function renderPublicView(container, codigoInicial = '') {
     <div class="app-shell">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="topbar-logo">🏐</span>
+          <span class="topbar-logo"></span>
           <span class="topbar-title" id="pub-liga-nombre">Liga Voleibol</span>
         </div>
         <div class="topbar-right">
@@ -33,14 +33,14 @@ export async function renderPublicView(container, codigoInicial = '') {
 function renderBuscador() {
   return `
     <div class="empty-state" style="max-width:440px;margin:4rem auto;padding:2rem">
-      <div class="empty-icon">🏐</div>
+      <div class="empty-icon"></div>
       <h2>Ver mi liga</h2>
       <p class="muted" style="margin-bottom:1.5rem">
         Ingresa el código o nombre corto de tu liga.
       </p>
       <div style="display:flex;gap:.6rem">
         <input type="text" id="input-codigo"
-          placeholder="Ej: lachona o QMT-X59"
+          placeholder="Ej: codigo o nombre-corto"
           maxlength="20"
           style="flex:1;font-size:1rem;padding:.65rem 1rem;border-radius:10px;
           border:1px solid var(--border);background:var(--bg);color:var(--text)"
