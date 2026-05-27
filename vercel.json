@@ -1,15 +1,15 @@
 {
-  "cleanUrls": true,
   "rewrites": [
+    { "source": "/src/(.*)", "destination": "/src/$1" },
+    { "source": "/styles.css", "destination": "/styles.css" },
+    { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/manifest.json", "destination": "/manifest.json" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ]
 }
