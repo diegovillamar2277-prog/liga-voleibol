@@ -232,9 +232,9 @@ export async function eliminarPartido(id) {
 export async function getPlayoffs(ligaId) {
   const { data } = await sb
     .from('playoffs')
-    .select('*')
+    .select('data')
     .eq('league_id', ligaId)
-    .single();
+    .maybeSingle();
   return data?.data || null;
 }
 
