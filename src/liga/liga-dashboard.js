@@ -607,20 +607,24 @@ function renderFinanzas(el) {
     const eq    = equipos.find(e=>e.nombre===nombre);
     if (!eq) return;
     let resto = (eq.arb_saldo||0) + monto;
-    // Aplicar a jugados pendientes primero
-    const pendientes = partidos.filter(p=>
-      !p.es_playoff&&p.jugado&&
-      ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
-    ).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-    for (const p of pendientes) {
-      if (resto < precioA) break;
-      const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
-      await actualizarPartido(p.id, { [campo]: true });
-      resto -= precioA;
-    }
-    await actualizarEquipo(eq.id, { arb_saldo: resto });
-    toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto>0?` — Saldo a favor: $${resto.toLocaleString('es-MX')}`:''}`);
-    renderTab('finanzas', document.querySelector('#liga-content'));
+
+// Aplicar a jugados pendientes primero
+const pendientes = partidos.filter(p=>
+  !p.es_playoff&&p.jugado&&
+  ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
+).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+
+for (const p of pendientes) {
+  if (resto < precioA) break;
+  const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
+  await actualizarPartido(p.id, { [campo]: true });
+  resto -= precioA;
+}
+
+// El resto queda como saldo a favor (incluye pagos anticipados de futuros)
+await actualizarEquipo(eq.id, { arb_saldo: resto });
+toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto>0?` — Saldo a favor: $${resto.toLocaleString('es-MX')}`:''}`);
+renderTab('finanzas', document.querySelector('#liga-content'));
   };
 }
 
