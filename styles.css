@@ -1,5 +1,5 @@
 /* ============================================================
-   Liga Voleibol — Estilos globales
+   Liga Voleibol — Estilos globales + Fase 2
    ============================================================ */
 
 /* ── Variables ─────────────────────────────────────────────── */
@@ -176,8 +176,8 @@ input:focus, select:focus, textarea:focus {
 .auth-footer  { text-align: center; font-size: .82rem; color: var(--muted); margin-top: 1.2rem; }
 
 /* ── Admin panel ───────────────────────────────────────────── */
-.admin-nav { display: flex; gap: .4rem; padding: .8rem 1.2rem; background: var(--card); border-bottom: 1px solid var(--border); }
-.admin-nav-btn { padding: .45rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-weight: 600; }
+.admin-nav { display: flex; gap: .4rem; padding: .8rem 1.2rem; background: var(--card); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.admin-nav-btn { padding: .45rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-weight: 600; white-space: nowrap; }
 .admin-nav-btn.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
 .admin-main { padding: 1.2rem; max-width: 1000px; margin: 0 auto; width: 100%; }
 .admin-section-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
@@ -314,4 +314,178 @@ input:focus, select:focus, textarea:focus {
   .resumen-fin-grid { grid-template-columns: 1fr 1fr; }
   .tab-nav { padding: .4rem .6rem; }
   .tab-nav button { padding: .35rem .65rem; font-size: .82rem; }
+}
+
+/* ============================================================
+   FASE 2 — Estilos nuevos
+   ============================================================ */
+
+/* ── Selector de ligas mejorado ─────────────────────────────── */
+.selector-header {
+  display: flex; align-items: center; gap: .8rem; margin-bottom: 1.2rem;
+}
+
+.liga-card-ultima {
+  border-color: var(--accent) !important;
+}
+
+.liga-card-badge-ultima {
+  display: inline-block; font-size: .68rem; font-weight: 700;
+  color: var(--accent); text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: .3rem;
+}
+
+.liga-card-stats {
+  display: flex; gap: .8rem; font-size: .8rem; color: var(--muted); margin-top: .3rem;
+}
+
+.liga-card-nueva {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: .3rem; min-height: 120px;
+}
+
+.liga-card-nueva-icon {
+  font-size: 1.8rem; color: var(--muted); line-height: 1;
+}
+
+/* ── Bracket de Playoffs ────────────────────────────────────── */
+.bracket-wrap {
+  display: flex; gap: 1.2rem; overflow-x: auto;
+  padding-bottom: 1rem; align-items: flex-start;
+}
+
+.bracket-ronda {
+  display: flex; flex-direction: column; gap: .5rem;
+  min-width: 200px; flex-shrink: 0;
+}
+
+.bracket-ronda-nombre {
+  font-size: .75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .7px; color: var(--muted); text-align: center;
+  padding: .3rem 0 .6rem; border-bottom: 1px solid var(--border); margin-bottom: .4rem;
+}
+
+.bracket-partidos {
+  display: flex; flex-direction: column; gap: 1.2rem;
+  justify-content: space-around; flex: 1;
+}
+
+.bracket-partido {
+  display: flex; flex-direction: column; background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; transition: border-color .15s; position: relative;
+}
+
+.bracket-partido-jugado { border-color: rgba(245,158,11,.4); }
+
+.bracket-equipo {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .5rem .8rem; gap: .5rem; transition: background .15s;
+}
+
+.bracket-equipo:first-of-type { border-bottom: 1px solid var(--border); }
+
+.bracket-ganador { background: rgba(245,158,11,.1); }
+.bracket-ganador .bracket-equipo-nom { color: var(--accent); font-weight: 800; }
+
+.bracket-equipo-nom {
+  font-size: .88rem; font-weight: 600; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.bracket-sets {
+  font-weight: 800; font-size: 1.1rem; color: var(--accent);
+  min-width: 20px; text-align: center;
+}
+
+.bracket-vs {
+  text-align: center; font-size: .7rem; color: var(--muted);
+  padding: .15rem 0; background: var(--card2); font-weight: 700;
+}
+
+.bracket-btn-resultado,
+.bracket-btn-editar { margin: .4rem .5rem; align-self: flex-end; }
+
+/* ── Modal de resultado bracket ────────────────────────────── */
+.bracket-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.65);
+  z-index: 1000; display: flex; align-items: center;
+  justify-content: center; padding: 1rem;
+}
+
+.bracket-modal-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.5rem; width: 100%;
+  max-width: 380px; box-shadow: var(--shadow);
+}
+
+.bracket-modal-equipos {
+  display: flex; align-items: center; gap: .6rem;
+  justify-content: center; flex-wrap: wrap;
+}
+
+.bracket-modal-equipo {
+  font-weight: 700; font-size: 1rem; text-align: center; flex: 1; min-width: 80px;
+}
+
+.bracket-modal-sep { color: var(--muted); font-weight: 700; }
+
+/* ── Campeón ─────────────────────────────────────────────────── */
+.po-campeon {
+  text-align: center; padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(245,158,11,.05));
+  border: 1px solid rgba(245,158,11,.4); border-radius: var(--radius); margin-bottom: 1.5rem;
+}
+
+.po-campeon-trofeo { font-size: 2.5rem; margin-bottom: .4rem; }
+
+.po-campeon-titulo {
+  font-size: .82rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .6px; font-weight: 700; margin-bottom: .3rem;
+}
+
+.po-campeon-nombre { font-size: 1.6rem; font-weight: 900; color: var(--accent); }
+
+/* ── Clasificación playoffs ────────────────────────────────── */
+.po-clasificacion { display: flex; flex-direction: column; gap: .3rem; }
+
+.po-clas-row {
+  display: flex; align-items: center; gap: .8rem; padding: .5rem .8rem;
+  border-radius: 8px; border: 1px solid transparent;
+  background: var(--card2); opacity: .6;
+}
+
+.po-clas-row.clasificado {
+  border-color: rgba(245,158,11,.3);
+  background: rgba(245,158,11,.05); opacity: 1;
+}
+
+.po-clas-pos { font-weight: 800; font-size: .95rem; min-width: 24px; color: var(--accent); }
+.po-clas-nom { flex: 1; font-weight: 600; }
+
+/* ── Bracket público (sin botones) ──────────────────────────── */
+.bracket-publico .bracket-partido { pointer-events: none; }
+
+/* ── Métricas admin ──────────────────────────────────────────── */
+.metricas-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+  gap: 1rem; margin-bottom: 1.2rem;
+}
+
+.metrica-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.2rem 1rem; text-align: center;
+}
+
+.metrica-val { font-size: 2rem; font-weight: 900; color: var(--accent); line-height: 1; margin-bottom: .4rem; }
+.metrica-lbl { font-size: .82rem; color: var(--muted); margin-bottom: .5rem; }
+.metrica-sub { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; }
+
+/* ── Responsive Fase 2 ───────────────────────────────────────── */
+@media (max-width: 540px) {
+  .bracket-ronda { min-width: 160px; }
+  .bracket-equipo-nom { font-size: .8rem; }
+  .po-campeon-nombre { font-size: 1.3rem; }
+  .metricas-grid { grid-template-columns: 1fr 1fr; }
+  .bracket-modal-card { padding: 1rem; }
 }
