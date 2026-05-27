@@ -200,15 +200,17 @@ async function abrirLiga(ligaData, el) {
     </nav>
     <section id="liga-content" class="section"></section>`;
 
+  const getContent = () => document.querySelector('#liga-content');
+
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      renderTab(btn.dataset.tab, el.querySelector('#liga-content'));
+      renderTab(btn.dataset.tab, getContent());
     });
   });
 
-  renderTab('tabla', el.querySelector('#liga-content'));
+  renderTab('tabla', getContent());
 }
 
 async function renderTab(tab, el) {
@@ -464,6 +466,11 @@ function renderFinanzas(el) {
   const arbCob   = norm.reduce((s,p)=>s+(p.pago_arb_a?precioA:0)+(p.pago_arb_b?precioA:0),0);
   const arbPend  = norm.reduce((s,p)=>s+(!p.pago_arb_a?precioA:0)+(!p.pago_arb_b?precioA:0),0);
 
+  // Calcular fixture completo para partidos futuros
+  const vueltas  = cfg.vueltas || 2;
+  const noms     = equipos.map(e => e.nombre);
+  const fixture  = generarFixture(noms);
+
   el.innerHTML = `
     <h2>💰 <span>Finanzas</span></h2>
     <div class="resumen-financiero">
@@ -479,11 +486,13 @@ function renderFinanzas(el) {
         </div>
         <div class="resumen-fin-card arb">
           <div class="resumen-fin-val">$${arbCob.toLocaleString('es-MX')}</div>
-          <div class="resumen-fin-lbl">Arbitrajes</div>
-          ${arbPend>0?`<div class="resumen-fin-pend">Pendiente $${arbPend.toLocaleString('es-MX')}</div>`:'<div class="resumen-fin-ok">✓</div>'}
+          <div class="resumen-fin-lbl">Arbitrajes cobrados</div>
+          ${arbPend>0?`<div class="resumen-fin-pend">Jugados pendientes $${arbPend.toLocaleString('es-MX')}</div>`:'<div class="resumen-fin-ok">✓ Jugados al corriente</div>'}
         </div>
       </div>
     </div>
+
+    <!-- Inscripciones -->
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">📋 Inscripciones</p>
       ${equipos.map(e=>`
@@ -495,9 +504,62 @@ function renderFinanzas(el) {
             : `<button class="arb-pill-btn" onclick="pagarInscripcionLiga('${e.id}')">Marcar pagado</button>`}
         </div>`).join('')}
     </div>
+
+    <!-- Adelanto por equipo -->
+    ${permitirAdelanto ? `
+    <div class="card" style="margin-top:1.2rem">
+      <p class="card-subtitle">💸 Adelanto de arbitrajes por equipo</p>
+      <p class="muted" style="font-size:.8rem;margin-bottom:1rem">
+        Incluye partidos jugados pendientes y partidos futuros del fixture. Puedes pagar cualquier monto parcial.
+      </p>
+      <div id="panel-adelanto-equipos">
+        ${equipos.map(eq => {
+          const n = eq.nombre;
+          const sid = n.replace(/\W+/g,'_');
+          const jugPendA = norm.filter(p=>p.equipo_a===n&&!p.pago_arb_a).length;
+          const jugPendB = norm.filter(p=>p.equipo_b===n&&!p.pago_arb_b).length;
+          const totalJug = jugPendA + jugPendB;
+          // Futuros
+          let futuros = 0;
+          for (let v=1;v<=vueltas;v++) {
+            fixture.forEach(enc => {
+              const eA = v===1?enc.local:enc.visitante;
+              const eB = v===1?enc.visitante:enc.local;
+              const yaJugado = partidos.find(p=>!p.es_playoff&&p.vuelta===v&&
+                ((p.equipo_a===eA&&p.equipo_b===eB)||(p.equipo_a===eB&&p.equipo_b===eA)));
+              if (!yaJugado&&(eA===n||eB===n)) futuros++;
+            });
+          }
+          const saldo = eq.arb_saldo||0;
+          const montoBruto = (totalJug+futuros)*precioA;
+          const montoNeto  = Math.max(0, montoBruto - saldo);
+          return `<div class="arb-equipo-row">
+            <div class="arb-equipo-nom">${esc(n)}</div>
+            <div class="arb-equipo-detalle">
+              ${totalJug>0?`<span class="muted" style="font-size:.8rem">⚠ ${totalJug} jugado${totalJug!==1?'s':''} pendiente${totalJug!==1?'s':''} ($${(totalJug*precioA).toLocaleString('es-MX')})</span>`:''}
+              ${futuros>0?`<span class="muted" style="font-size:.8rem">📅 ${futuros} futuro${futuros!==1?'s':''} ($${(futuros*precioA).toLocaleString('es-MX')})</span>`:''}
+              ${saldo>0?`<span style="color:#10b981;font-size:.8rem">✓ Saldo a favor: $${saldo.toLocaleString('es-MX')}</span>`:''}
+              ${montoNeto===0&&totalJug===0?'<span class="badge win">✓ Al corriente</span>':`<strong>Pendiente neto: $${montoNeto.toLocaleString('es-MX')}</strong>`}
+            </div>
+            <div class="arb-equipo-acciones">
+              <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">💸 Registrar pago</button>
+            </div>
+            <div id="arb-form-${sid}" style="display:none;width:100%;margin-top:.5rem" class="arb-equipo-form">
+              <input type="number" id="arb-monto-${sid}" value="${montoNeto||precioA}" min="1"
+                style="width:110px;padding:.3rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
+              <button class="btn" style="font-size:.8rem" onclick="confirmarPagoEquipoLiga('${esc(n)}','${sid}',${totalJug},${precioA})">✓ Confirmar</button>
+              <button class="btn secondary" style="font-size:.8rem" onclick="abrirPagoEquipo('${sid}')">Cancelar</button>
+              <p class="muted" style="font-size:.74rem;margin-top:.3rem">Puedes pagar cualquier monto parcial — el resto queda como saldo a favor.</p>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Detalle por partido -->
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">Detalle de arbitrajes por partido</p>
-      ${!norm.length ? '<p class="muted">Sin partidos.</p>' :
+      ${!norm.length ? '<p class="muted">Sin partidos jugados aún.</p>' :
         norm.sort((a,b)=>a.vuelta-b.vuelta).map(p=>`
           <div class="fixture-item" style="flex-direction:column;align-items:flex-start;gap:.4rem">
             <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
@@ -523,12 +585,42 @@ function renderFinanzas(el) {
   window.pagarInscripcionLiga = async id => {
     if (!confirmar('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
-    renderTab('finanzas', el); toast('Inscripción registrada ✓');
+    renderTab('finanzas', document.querySelector('#liga-content'));
+    toast('Inscripción registrada ✓');
   };
 
   window.pagarArbPartido = async (id, campo) => {
     await actualizarPartido(id, { [campo]: true });
-    renderTab('finanzas', el); toast('Arbitraje registrado ✓');
+    renderTab('finanzas', document.querySelector('#liga-content'));
+    toast('Arbitraje registrado ✓');
+  };
+
+  window.abrirPagoEquipo = sid => {
+    const form = document.getElementById(`arb-form-${sid}`);
+    if (form) form.style.display = form.style.display==='none'?'flex':'none';
+  };
+
+  window.confirmarPagoEquipoLiga = async (nombre, sid, totalJug, precioA) => {
+    const inp   = document.getElementById(`arb-monto-${sid}`);
+    const monto = parseInt(inp?.value);
+    if (!monto||monto<1) { toast('Ingresa un monto válido','error'); return; }
+    const eq    = equipos.find(e=>e.nombre===nombre);
+    if (!eq) return;
+    let resto = (eq.arb_saldo||0) + monto;
+    // Aplicar a jugados pendientes primero
+    const pendientes = partidos.filter(p=>
+      !p.es_playoff&&p.jugado&&
+      ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
+    ).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+    for (const p of pendientes) {
+      if (resto < precioA) break;
+      const campo = p.equipo_a===nombre ? 'pago_arb_a' : 'pago_arb_b';
+      await actualizarPartido(p.id, { [campo]: true });
+      resto -= precioA;
+    }
+    await actualizarEquipo(eq.id, { arb_saldo: resto });
+    toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto>0?` — Saldo a favor: $${resto.toLocaleString('es-MX')}`:''}`);
+    renderTab('finanzas', document.querySelector('#liga-content'));
   };
 }
 
