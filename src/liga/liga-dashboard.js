@@ -1,5 +1,5 @@
 // ============================================================
-//  liga-dashboard.js — Vista del organizador de su liga
+//  liga-dashboard.js — Vista del organizador (Fase 3: push + offline)
 // ============================================================
 import { sb } from '../lib/supabase.js';
 import { logout } from '../auth/auth.js';
@@ -12,18 +12,28 @@ import {
   contarLigasDeUsuario, crearLiga, enviarPeticion
 } from '../lib/db.js';
 import { toast, esc, formatFecha, confirmar } from '../lib/ui.js';
+import { saveSnapshot } from '../lib/offline.js';
+import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
 
 let LIGA     = null;
 let equipos  = [];
 let partidos = [];
 
-// Helper: siempre obtener el contenedor activo del DOM
 const getContent = () => document.querySelector('#liga-content');
 
-// Obtener perfil actual de forma segura
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
   return mod.currentProfile;
+}
+
+// ── Actualizar snapshot offline ──────────────────────────────
+async function actualizarSnapshotOffline() {
+  try {
+    const [eqs, pts] = await Promise.all([getEquipos(LIGA.id), getPartidos(LIGA.id)]);
+    await saveSnapshot(LIGA.id, { liga: LIGA, equipos: eqs, partidos: pts });
+    const key = (LIGA.alias || LIGA.codigo).toLowerCase();
+    await saveSnapshot(`codigo:${key}`, { ligaId: LIGA.id, liga: LIGA, equipos: eqs, partidos: pts });
+  } catch (_) { /* offline snapshot es best-effort */ }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -60,7 +70,6 @@ export async function renderOrgPanel(container) {
   }
 }
 
-// ── Sin ligas ────────────────────────────────────────────────
 function renderSinLigas(el) {
   el.innerHTML = `
     <div class="empty-state">
@@ -72,7 +81,6 @@ function renderSinLigas(el) {
   el.querySelector('#btn-crear-primera').onclick = () => renderFormCrearLiga(el);
 }
 
-// ── Selector de ligas ────────────────────────────────────────
 function renderSelectorLigas(ligas, el) {
   el.innerHTML = `
     <div class="ligas-selector">
@@ -102,7 +110,6 @@ function renderSelectorLigas(ligas, el) {
   if (btnNueva) btnNueva.onclick = () => renderFormCrearLiga(el);
 }
 
-// ── Crear liga ───────────────────────────────────────────────
 async function renderFormCrearLiga(el) {
   const perfil = await getPerfil();
   if (!perfil) { toast('Error de sesión, recarga','error'); return; }
@@ -176,6 +183,9 @@ async function abrirLiga(ligaData, el) {
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
 
+  // Guardar snapshot al abrir la liga (datos frescos)
+  await actualizarSnapshotOffline();
+
   const topbar = document.querySelector('#topbar-liga-nombre');
   if (topbar) topbar.textContent = LIGA.nombre;
 
@@ -191,7 +201,6 @@ async function abrirLiga(ligaData, el) {
     </nav>
     <section id="liga-content" class="section"></section>`;
 
-  // IMPORTANTE: siempre buscar #liga-content en el DOM, nunca guardar referencia local
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
@@ -203,7 +212,6 @@ async function abrirLiga(ligaData, el) {
   renderTab('tabla');
 }
 
-// renderTab sin parámetro el — siempre usa getContent()
 async function renderTab(tab) {
   const el = getContent();
   if (!el) return;
@@ -380,12 +388,20 @@ function renderPartidos(el) {
     if (existe) { toast('Ya existe este partido en esa vuelta','error'); return; }
 
     try {
-      await guardarPartido(LIGA.id, {
+      const partidoGuardado = await guardarPartido(LIGA.id, {
         vuelta, fecha, equipo_a:eA, equipo_b:eB,
         sets, sets_a:sA, sets_b:sB, ganador, jugado:true,
         pago_arb_a:false, pago_arb_b:false
       });
+
       toast(`✓ ${eA} ${sA}:${sB} ${eB}`);
+
+      // 🔔 Notificación push
+      await notifyDesdePartidoGuardado(LIGA, partidoGuardado);
+
+      // 💾 Actualizar snapshot offline
+      await actualizarSnapshotOffline();
+
       e.target.reset();
       renderTab('partidos');
     } catch(err) { toast(err.message,'error'); }
@@ -394,6 +410,7 @@ function renderPartidos(el) {
   window.eliminarPartidoLiga = async id => {
     if (!confirmar('¿Eliminar este partido?')) return;
     await eliminarPartido(id);
+    await actualizarSnapshotOffline();
     renderTab('partidos');
     toast('Partido eliminado');
   };
@@ -424,6 +441,7 @@ function renderEquiposTab(el) {
     if (!nom) { toast('Escribe un nombre','error'); return; }
     if (equipos.some(e=>e.nombre.toLowerCase()===nom.toLowerCase())) { toast('Nombre duplicado','error'); return; }
     await agregarEquipo(LIGA.id, nom);
+    await actualizarSnapshotOffline();
     inp.value = '';
     renderTab('equipos');
     toast('Equipo agregado ✓');
@@ -432,6 +450,7 @@ function renderEquiposTab(el) {
   window.eliminarEquipoLiga = async id => {
     if (!confirmar('¿Eliminar este equipo?')) return;
     await eliminarEquipo(id);
+    await actualizarSnapshotOffline();
     renderTab('equipos');
     toast('Equipo eliminado');
   };
@@ -462,7 +481,6 @@ function renderFinanzas(el) {
   const noms     = equipos.map(e => e.nombre);
   const fixture  = generarFixture(noms);
 
-  // Construir HTML del panel de adelanto por equipo
   const htmlAdelanto = equipos.map((eq, idx) => {
     const n   = eq.nombre;
     const sid = `eq_${idx}`;
@@ -515,7 +533,6 @@ function renderFinanzas(el) {
 
   el.innerHTML = `
     <h2>💰 <span>Finanzas</span></h2>
-
     <div class="resumen-financiero">
       <div class="resumen-fin-grid">
         <div class="resumen-fin-card total">
@@ -538,7 +555,6 @@ function renderFinanzas(el) {
         </div>
       </div>
     </div>
-
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">📋 Inscripciones</p>
       ${equipos.map(e=>`
@@ -550,7 +566,6 @@ function renderFinanzas(el) {
             : `<button class="arb-pill-btn" onclick="pagarInscripcionLiga('${e.id}')">Marcar pagado</button>`}
         </div>`).join('')}
     </div>
-
     ${permitirAdelanto ? `
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">💸 Arbitrajes por equipo</p>
@@ -559,7 +574,6 @@ function renderFinanzas(el) {
       </p>
       ${htmlAdelanto}
     </div>` : ''}
-
     <div class="card" style="margin-top:1.2rem">
       <p class="card-subtitle">Detalle por partido</p>
       ${!norm.length ? '<p class="muted">Sin partidos jugados aún.</p>' :
@@ -590,12 +604,14 @@ function renderFinanzas(el) {
   window.pagarInscripcionLiga = async id => {
     if (!confirmar('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
+    await actualizarSnapshotOffline();
     renderTab('finanzas');
     toast('Inscripción registrada ✓');
   };
 
   window.pagarArbPartido = async (id, campo) => {
     await actualizarPartido(id, { [campo]: true });
+    await actualizarSnapshotOffline();
     renderTab('finanzas');
     toast('Arbitraje registrado ✓');
   };
@@ -617,8 +633,6 @@ function renderFinanzas(el) {
     if (!eq) { toast('Equipo no encontrado','error'); return; }
 
     let resto = (eq.arb_saldo || 0) + monto;
-
-    // Aplicar a partidos jugados pendientes primero (orden cronológico)
     const pendientes = partidos.filter(p =>
       !p.es_playoff && p.jugado &&
       ((p.equipo_a===nombre&&!p.pago_arb_a)||(p.equipo_b===nombre&&!p.pago_arb_b))
@@ -631,8 +645,8 @@ function renderFinanzas(el) {
       resto -= precioA;
     }
 
-    // Guardar saldo restante como crédito para futuros
     await actualizarEquipo(eq.id, { arb_saldo: resto });
+    await actualizarSnapshotOffline();
     toast(`✓ $${monto.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
     renderTab('finanzas');
   };
@@ -707,14 +721,41 @@ function renderConfigTab(el) {
       <div class="flex mt1"><button class="btn" id="btn-guardar-formato">💾 Guardar formato</button></div>
     </div>
     <div class="card">
-      <p class="card-subtitle">🔗 Código de acceso público</p>
-      <p class="muted" style="font-size:.85rem;margin-bottom:.8rem">
-        Comparte este código para que cualquiera vea tu liga sin iniciar sesión.
+      <p class="card-subtitle">🔗 Acceso público</p>
+      <p class="muted" style="font-size:.85rem;margin-bottom:1rem">
+        Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
       </p>
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <code class="codigo-chip" style="font-size:1.4rem;padding:.5rem 1.2rem">${LIGA.codigo}</code>
-        <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar código</button>
-        <button class="btn secondary" id="btn-copiar-link">📋 Copiar link</button>
+      <div style="margin-bottom:1.2rem">
+        <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.4rem">
+          Nombre corto personalizado
+        </label>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+          <input type="text" id="input-alias"
+            value="${esc(LIGA.alias||'')}"
+            placeholder="ej: lachona"
+            maxlength="20"
+            style="max-width:200px;font-size:.95rem;letter-spacing:.05rem"
+            oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')">
+          <button class="btn" id="btn-guardar-alias">Guardar alias</button>
+        </div>
+        <p class="muted" style="font-size:.75rem;margin-top:.4rem">
+          Solo letras minúsculas, números y guiones. Mínimo 3 caracteres.<br>
+          ${LIGA.alias
+            ? `Link actual: <code style="color:var(--accent)">${location.origin}/?liga=${LIGA.alias}</code>`
+            : 'Sin alias aún — se accede por código aleatorio.'}
+        </p>
+        <div id="alias-error" class="auth-error" style="display:none;margin-top:.4rem"></div>
+        <div id="alias-ok" style="display:none;color:var(--green);font-size:.82rem;margin-top:.4rem"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:1rem">
+        <label style="font-size:.82rem;color:var(--muted);font-weight:600;display:block;margin-bottom:.6rem">
+          Código de respaldo (siempre funciona)
+        </label>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <code class="codigo-chip" style="font-size:1.3rem;padding:.4rem 1rem">${LIGA.codigo}</code>
+          <button class="btn secondary" id="btn-renovar-codigo">🔄 Renovar</button>
+          <button class="btn secondary" id="btn-copiar-link">📋 Copiar link</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -724,9 +765,20 @@ function renderConfigTab(el) {
         <input type="email" id="invite-email" placeholder="correo@ejemplo.com" style="flex:1">
         <button class="btn" id="btn-invitar">Invitar</button>
       </div>
+    </div>
+    <div class="card">
+      <p class="card-subtitle">🔔 Notificaciones</p>
+      <p class="muted" style="font-size:.82rem;margin-bottom:.8rem">
+        Recibe un aviso en este dispositivo cada vez que se registre un partido.
+      </p>
+      <div id="push-toggle-container"></div>
     </div>`;
 
   cargarCoAdmins(el.querySelector('#lista-coadmins'));
+
+  // Push toggle
+  const pushCont = el.querySelector('#push-toggle-container');
+  if (pushCont) renderPushToggle(pushCont);
 
   el.querySelector('#form-cfg-liga').onsubmit = async e => {
     e.preventDefault();
@@ -742,6 +794,7 @@ function renderConfigTab(el) {
     LIGA.config = nuevoCfg; LIGA.nombre = nuevoCfg.nombre;
     const t = document.querySelector('#topbar-liga-nombre');
     if (t) t.textContent = nuevoCfg.nombre;
+    await actualizarSnapshotOffline();
     toast('Configuración guardada ✓');
   };
 
@@ -758,6 +811,34 @@ function renderConfigTab(el) {
     toast('Formato guardado ✓');
   };
 
+  el.querySelector('#btn-guardar-alias').onclick = async () => {
+    const aliasInp = el.querySelector('#input-alias');
+    const aliasErr = el.querySelector('#alias-error');
+    const aliasOk  = el.querySelector('#alias-ok');
+    aliasErr.style.display = 'none';
+    aliasOk.style.display  = 'none';
+    const val = aliasInp.value.trim();
+    try {
+      if (!val) {
+        await actualizarLiga(LIGA.id, { alias: null });
+        LIGA.alias = null;
+        aliasOk.textContent = 'Alias eliminado.';
+        aliasOk.style.display = 'block';
+      } else {
+        const { actualizarAlias } = await import('../lib/db.js');
+        const limpio = await actualizarAlias(LIGA.id, val);
+        LIGA.alias = limpio;
+        aliasOk.textContent = `✓ Link: ${location.origin}/?liga=${limpio}`;
+        aliasOk.style.display = 'block';
+      }
+      renderTab('config');
+      toast('Alias guardado ✓');
+    } catch(err) {
+      aliasErr.textContent = err.message;
+      aliasErr.style.display = 'block';
+    }
+  };
+
   el.querySelector('#btn-renovar-codigo').onclick = async () => {
     if (!confirmar('¿Renovar el código? El anterior dejará de funcionar.')) return;
     const nuevo = await renovarCodigo(LIGA.id);
@@ -767,7 +848,7 @@ function renderConfigTab(el) {
   };
 
   el.querySelector('#btn-copiar-link').onclick = () => {
-    const link = `${location.origin}/?liga=${LIGA.codigo}`;
+    const link = `${location.origin}/?liga=${LIGA.alias || LIGA.codigo}`;
     navigator.clipboard?.writeText(link).then(()=>toast('Link copiado ✓')).catch(()=>toast(link));
   };
 

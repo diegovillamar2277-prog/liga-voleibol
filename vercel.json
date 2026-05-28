@@ -1,15 +1,12 @@
 {
-  "outputDirectory": ".",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
-      ]
-    }
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "routes": [
+    { "src": "/sw\\.js", "dest": "/sw.js", "headers": { "Cache-Control": "no-cache" } },
+    { "src": "/manifest\\.json", "dest": "/manifest.json" },
+    { "src": "/styles\\.css", "dest": "/styles.css" },
+    { "src": "/icons/(.+)", "dest": "/icons/$1" },
+    { "src": "/src/(.+)", "dest": "/src/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

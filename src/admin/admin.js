@@ -1,9 +1,10 @@
 // ============================================================
-//  admin.js — Panel de administrador
+//  admin.js — Panel de administrador (Fase 2)
 // ============================================================
 import {
   getTodosUsuarios, cambiarRol, desactivarUsuario, activarUsuario,
-  getTodasLigas, actualizarLiga, getPeticiones, responderPeticion
+  getTodasLigas, actualizarLiga, getPeticiones, responderPeticion,
+  getMetricas
 } from '../lib/db.js';
 import { currentProfile, logout } from '../auth/auth.js';
 import { toast } from '../lib/ui.js';
@@ -24,7 +25,8 @@ export async function renderAdminPanel(container) {
       </header>
 
       <nav class="admin-nav">
-        <button class="admin-nav-btn active" data-section="ligas">🏆 Ligas</button>
+        <button class="admin-nav-btn active" data-section="metricas">📊 Métricas</button>
+        <button class="admin-nav-btn" data-section="ligas">🏆 Ligas</button>
         <button class="admin-nav-btn" data-section="usuarios">👤 Usuarios</button>
         <button class="admin-nav-btn" data-section="peticiones">📋 Peticiones</button>
       </nav>
@@ -38,7 +40,6 @@ export async function renderAdminPanel(container) {
     await logout();
   });
 
-  // Nav tabs
   container.querySelectorAll('.admin-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       container.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
@@ -47,14 +48,86 @@ export async function renderAdminPanel(container) {
     });
   });
 
-  cargarSeccion('ligas');
+  cargarSeccion('metricas');
 
   async function cargarSeccion(seccion) {
     const main = container.querySelector('#admin-content');
     main.innerHTML = '<div class="loading-spinner">Cargando…</div>';
+    if (seccion === 'metricas')   await renderMetricas(main);
     if (seccion === 'ligas')      await renderLigas(main);
     if (seccion === 'usuarios')   await renderUsuarios(main);
     if (seccion === 'peticiones') await renderPeticiones(main);
+  }
+
+  // ── Métricas ───────────────────────────────────────────────
+  async function renderMetricas(el) {
+    let metricas;
+    try {
+      metricas = await getMetricas();
+    } catch (e) {
+      el.innerHTML = '<p class="empty">Error al cargar métricas.</p>';
+      return;
+    }
+
+    const { usuarios, ligas, partidos, equipos, ligasActivas, ligasInactivas, ultimosUsuarios, ultimasLigas } = metricas;
+
+    el.innerHTML = `
+      <div class="admin-section-header">
+        <h2>📊 Métricas de la plataforma</h2>
+      </div>
+
+      <div class="metricas-grid">
+        <div class="metrica-card">
+          <div class="metrica-val">${usuarios}</div>
+          <div class="metrica-lbl">👤 Usuarios</div>
+        </div>
+        <div class="metrica-card">
+          <div class="metrica-val">${ligas}</div>
+          <div class="metrica-lbl">🏆 Ligas totales</div>
+          <div class="metrica-sub">
+            <span class="badge win">${ligasActivas} activas</span>
+            <span class="badge danger">${ligasInactivas} inactivas</span>
+          </div>
+        </div>
+        <div class="metrica-card">
+          <div class="metrica-val">${equipos}</div>
+          <div class="metrica-lbl">👥 Equipos</div>
+        </div>
+        <div class="metrica-card">
+          <div class="metrica-val">${partidos}</div>
+          <div class="metrica-lbl">🏐 Partidos jugados</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.2rem">
+        <div>
+          <h3 style="font-size:.95rem;margin-bottom:.7rem;color:var(--muted)">Usuarios recientes</h3>
+          ${ultimosUsuarios.length === 0
+            ? '<p class="empty">Sin usuarios.</p>'
+            : ultimosUsuarios.map(u => `
+              <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.nombre || '—')}</div>
+                  <div style="font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.email)}</div>
+                </div>
+                <span class="badge-role ${u.role}">${u.role === 'superadmin' ? '⭐' : u.role === 'admin' ? '🛡' : '🏆'}</span>
+              </div>`).join('')}
+        </div>
+
+        <div>
+          <h3 style="font-size:.95rem;margin-bottom:.7rem;color:var(--muted)">Ligas recientes</h3>
+          ${ultimasLigas.length === 0
+            ? '<p class="empty">Sin ligas.</p>'
+            : ultimasLigas.map(l => `
+              <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.nombre)}</div>
+                  <div style="font-size:.75rem;color:var(--muted)">${esc(l.profiles?.nombre || l.profiles?.email || '—')}</div>
+                </div>
+                <span class="badge ${l.activa ? 'win' : 'danger'}">${l.activa ? 'Activa' : 'Inactiva'}</span>
+              </div>`).join('')}
+        </div>
+      </div>`;
   }
 
   // ── Ligas ──────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 // ============================================================
-//  auth-ui.js — Pantalla de Login / Registro
+//  auth-ui.js — Pantalla de Login / Registro (Fase 2: botón atrás)
 // ============================================================
 import { login, register, currentProfile } from './auth.js';
 
@@ -27,7 +27,7 @@ export function renderAuthScreen(container) {
             <input type="password" id="login-pass" placeholder="••••••••" required autocomplete="current-password">
           </div>
           <div id="login-error" class="auth-error" style="display:none"></div>
-          <button type="submit" class="auth-btn" id="btn-login">Entrar</button>
+          <button type="submit" class="auth-btn btn" id="btn-login">Entrar</button>
         </form>
 
         <!-- REGISTRO -->
@@ -46,13 +46,18 @@ export function renderAuthScreen(container) {
           </div>
           <div id="reg-error" class="auth-error" style="display:none"></div>
           <div id="reg-success" class="auth-success" style="display:none"></div>
-          <button type="submit" class="auth-btn" id="btn-register">Crear cuenta</button>
+          <button type="submit" class="auth-btn btn" id="btn-register">Crear cuenta</button>
         </form>
 
-        <p class="auth-footer">
-          ¿Solo quieres ver tu liga? 
-          <a href="#" id="link-codigo">Ingresa con código →</a>
-        </p>
+        <div class="auth-footer-links">
+          <p class="auth-footer">
+            ¿Solo quieres ver tu liga?
+            <a href="#" id="link-codigo">Ingresa con código →</a>
+          </p>
+          <p class="auth-footer" style="margin-top:.4rem">
+            <a href="#" id="link-volver">← Volver al inicio</a>
+          </p>
+        </div>
       </div>
     </div>`;
 
@@ -70,7 +75,7 @@ export function renderAuthScreen(container) {
   // Login submit
   container.querySelector('#form-login').addEventListener('submit', async e => {
     e.preventDefault();
-    const btn = container.querySelector('#btn-login');
+    const btn   = container.querySelector('#btn-login');
     const errEl = container.querySelector('#login-error');
     errEl.style.display = 'none';
     btn.disabled = true; btn.textContent = 'Entrando…';
@@ -91,9 +96,9 @@ export function renderAuthScreen(container) {
   // Register submit
   container.querySelector('#form-register').addEventListener('submit', async e => {
     e.preventDefault();
-    const btn    = container.querySelector('#btn-register');
-    const errEl  = container.querySelector('#reg-error');
-    const okEl   = container.querySelector('#reg-success');
+    const btn   = container.querySelector('#btn-register');
+    const errEl = container.querySelector('#reg-error');
+    const okEl  = container.querySelector('#reg-success');
     errEl.style.display = 'none'; okEl.style.display = 'none';
     btn.disabled = true; btn.textContent = 'Creando cuenta…';
     try {
@@ -117,5 +122,11 @@ export function renderAuthScreen(container) {
   container.querySelector('#link-codigo').addEventListener('click', e => {
     e.preventDefault();
     document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'codigo' } }));
+  });
+
+  // ← Volver al inicio (bug 1 fix)
+  container.querySelector('#link-volver').addEventListener('click', e => {
+    e.preventDefault();
+    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'home' } }));
   });
 }
