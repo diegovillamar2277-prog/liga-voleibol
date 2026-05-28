@@ -194,47 +194,33 @@ async function abrirLiga(ligaData, el) {
 
   tabActual = 'tabla';
 
+  // Exponer cambiarTab globalmente para que onclick en HTML siempre funcione
+  window.cambiarTab = (tab) => {
+    document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
+    if (btn) btn.classList.add('active');
+    tabActual = tab;
+    renderTab(tab);
+  };
+
   el.innerHTML = `
     <nav class="tab-nav" id="liga-nav">
-      <button data-tab="tabla"    class="active">Tabla</button>
-      <button data-tab="fixture"  >Fixture</button>
-      <button data-tab="partidos" >Partidos</button>
-      <button data-tab="equipos"  >Equipos</button>
-      <button data-tab="playoffs" >🏆 Playoffs</button>
-      <button data-tab="finanzas" >💰 Finanzas</button>
-      <button data-tab="config"   >⚙ Config</button>
+      <button data-tab="tabla"    onclick="cambiarTab('tabla')"    class="active">Tabla</button>
+      <button data-tab="fixture"  onclick="cambiarTab('fixture')"  >Fixture</button>
+      <button data-tab="partidos" onclick="cambiarTab('partidos')" >Partidos</button>
+      <button data-tab="equipos"  onclick="cambiarTab('equipos')"  >Equipos</button>
+      <button data-tab="playoffs" onclick="cambiarTab('playoffs')" >🏆 Playoffs</button>
+      <button data-tab="finanzas" onclick="cambiarTab('finanzas')" >💰 Finanzas</button>
+      <button data-tab="config"   onclick="cambiarTab('config')"   >⚙ Config</button>
     </nav>
     <section id="liga-content" class="section"></section>`;
-
-  // Listener en document — sobrevive cualquier re-render interno
-  // Solo se agrega una vez gracias al flag
-  if (!navListenerAdded) {
-    navListenerAdded = true;
-    document.addEventListener('click', e => {
-      const btn = e.target.closest('#liga-nav button[data-tab]');
-      if (!btn) return;
-      document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      tabActual = btn.dataset.tab;
-      renderTab(tabActual);
-    });
-
-    // Re-render al volver al navegador — dos eventos para cubrir todos los casos
-    const reactivar = () => {
-      if (LIGA && getContent()) renderTab(tabActual);
-    };
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reactivar();
-    });
-    window.addEventListener('focus', reactivar);
-  }
 
   renderTab('tabla');
 }
 
 async function renderTab(tab) {
   const el = getContent();
-  if (!el) { console.error('liga-content no encontrado!'); return; }
+  if (!el) return;
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
   LIGA     = await getLigaById(LIGA.id);
