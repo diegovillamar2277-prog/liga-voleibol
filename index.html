@@ -22,35 +22,39 @@
     <p class="muted">Iniciando…</p>
   </div>
 
-  <!-- Toast container (los toasts se insertan aquí por JS) -->
-
   <script type="module" src="/src/main.js"></script>
 
-  <!-- Service Worker para PWA -->
+  <!-- Service Worker -->
   <script>
-    // Desregistrar service worker para forzar carga fresca
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(reg => reg.unregister());
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => {
+            console.log('[SW] Registrado:', reg.scope);
+            // Verificar actualizaciones cada vez que la app se abre
+            reg.update();
+          })
+          .catch(err => console.warn('[SW] Error al registrar:', err));
       });
     }
   </script>
+
+  <!-- buscarLiga global (evita problemas de caché con módulos ES) -->
   <script>
-  window.buscarLiga = async function() {
-    const inp = document.getElementById('input-codigo');
-    const err = document.getElementById('buscar-error');
-    if (!inp) return;
-    const codigo = inp.value.trim().toUpperCase();
-    if (!codigo) {
-      if (err) { err.textContent = 'Escribe el código'; err.style.display = 'block'; }
-      return;
-    }
-    if (err) err.style.display = 'none';
-    const btn = inp.nextElementSibling;
-    if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
-    // Redirigir a URL con código
-    window.location.href = '/?liga=' + codigo;
-  };
-</script>
+    window.buscarLiga = async function() {
+      const inp = document.getElementById('input-codigo');
+      const err = document.getElementById('buscar-error');
+      if (!inp) return;
+      const codigo = inp.value.trim();
+      if (!codigo) {
+        if (err) { err.textContent = 'Escribe el código'; err.style.display = 'block'; }
+        return;
+      }
+      if (err) err.style.display = 'none';
+      const btn = inp.nextElementSibling;
+      if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
+      window.location.href = '/?liga=' + encodeURIComponent(codigo);
+    };
+  </script>
 </body>
 </html>
