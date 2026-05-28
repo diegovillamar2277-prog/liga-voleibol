@@ -1,16 +1,12 @@
 {
-  "rewrites": [
-    { "source": "/(.*)\\.js", "destination": "/$1.js" },
-    { "source": "/(.*)\\.css", "destination": "/$1.css" },
-    { "source": "/(.*)\\.json", "destination": "/$1.json" },
-    { "source": "/(.*)\\.png", "destination": "/$1.png" },
-    { "source": "/(.*)\\.svg", "destination": "/$1.svg" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/sw.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
-    }
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "routes": [
+    { "src": "/sw\\.js", "dest": "/sw.js", "headers": { "Cache-Control": "no-cache" } },
+    { "src": "/manifest\\.json", "dest": "/manifest.json" },
+    { "src": "/styles\\.css", "dest": "/styles.css" },
+    { "src": "/icons/(.+)", "dest": "/icons/$1" },
+    { "src": "/src/(.+)", "dest": "/src/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
