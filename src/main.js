@@ -15,8 +15,8 @@ async function boot() {
 }
 
 async function route() {
-  const params = new URLSearchParams(location.search);
-  const codigoURL = params.get('liga') || '';
+  const params     = new URLSearchParams(location.search);
+  const codigoURL  = params.get('liga') || '';
 
   if (codigoURL) {
     renderPublicView(app, codigoURL);
@@ -32,6 +32,7 @@ async function route() {
     if (isAdmin()) {
       renderAdminPanel(app);
     } else {
+      // Renderizar panel — liga-dashboard restaurará la liga desde localStorage
       renderOrgPanel(app);
     }
     return;
@@ -42,12 +43,15 @@ async function route() {
 
 document.addEventListener('auth-change', ({ detail }) => {
   if (detail.event === 'SIGNED_IN') {
-    // Limpiar parámetros de URL y redirigir al panel
     window.history.replaceState({}, '', '/');
     route();
   }
-  if (detail.event === 'SIGNED_OUT') renderPublicView(app, '');
+  if (detail.event === 'SIGNED_OUT') {
+    localStorage.removeItem('ligaActualId');
+    renderPublicView(app, '');
+  }
 });
+
 document.addEventListener('nav', ({ detail }) => {
   if (detail.page === 'login')  renderAuthScreen(app);
   if (detail.page === 'codigo') renderPublicView(app, '');

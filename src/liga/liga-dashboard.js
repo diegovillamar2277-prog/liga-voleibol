@@ -15,11 +15,32 @@ import { toast, esc, formatFecha, confirmar } from '../lib/ui.js';
 import { saveSnapshot } from '../lib/offline.js';
 import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
 
-let LIGA     = null;
-let equipos  = [];
-let partidos = [];
+// Estado en window para sobrevivir cuando Edge descarga módulos ES
+if (!window._ligaState) {
+  window._ligaState = { LIGA: null, equipos: [], partidos: [] };
+}
 
 const getContent = () => document.querySelector('#liga-content');
+
+// Variables locales que siempre apuntan al estado en window
+let LIGA     = window._ligaState.LIGA;
+let equipos  = window._ligaState.equipos;
+let partidos = window._ligaState.partidos;
+
+// Sincronizar variables locales con window._ligaState
+function syncState() {
+  LIGA     = window._ligaState.LIGA;
+  equipos  = window._ligaState.equipos;
+  partidos = window._ligaState.partidos;
+}
+
+function saveState() {
+  window._ligaState.LIGA     = LIGA;
+  window._ligaState.equipos  = equipos;
+  window._ligaState.partidos = partidos;
+  // Guardar ID en localStorage — sobrevive minimizar, recargas, todo
+  if (LIGA?.id) localStorage.setItem('ligaActualId', LIGA.id);
+}
 
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
@@ -29,10 +50,12 @@ async function getPerfil() {
 // ── Actualizar snapshot offline ──────────────────────────────
 async function actualizarSnapshotOffline() {
   try {
-    const [eqs, pts] = await Promise.all([getEquipos(LIGA.id), getPartidos(LIGA.id)]);
-    await saveSnapshot(LIGA.id, { liga: LIGA, equipos: eqs, partidos: pts });
-    const key = (LIGA.alias || LIGA.codigo).toLowerCase();
-    await saveSnapshot(`codigo:${key}`, { ligaId: LIGA.id, liga: LIGA, equipos: eqs, partidos: pts });
+    const liga = window._ligaState.LIGA;
+    if (!liga) return;
+    const [eqs, pts] = await Promise.all([getEquipos(liga.id), getPartidos(liga.id)]);
+    await saveSnapshot(liga.id, { liga, equipos: eqs, partidos: pts });
+    const key = (liga.alias || liga.codigo).toLowerCase();
+    await saveSnapshot(`codigo:${key}`, { ligaId: liga.id, liga, equipos: eqs, partidos: pts });
   } catch (_) { /* offline snapshot es best-effort */ }
 }
 
@@ -58,8 +81,22 @@ export async function renderOrgPanel(container) {
       <main id="org-main"></main>
     </div>`;
 
-  container.querySelector('#btn-logout-org').addEventListener('click', logout);
+  container.querySelector('#btn-logout-org').addEventListener('click', () => {
+    localStorage.removeItem('ligaActualId');
+    logout();
+  });
+
   const misLigas = await getMisLigas(perfil.id);
+
+  // Restaurar liga desde localStorage si Edge recargó la página
+  const ligaGuardadaId = localStorage.getItem('ligaActualId');
+  if (ligaGuardadaId) {
+    const ligaGuardada = misLigas.find(l => l.id === ligaGuardadaId);
+    if (ligaGuardada) {
+      await abrirLiga(ligaGuardada, container.querySelector('#org-main'));
+      return;
+    }
+  }
 
   if (!misLigas.length) {
     renderSinLigas(container.querySelector('#org-main'));
@@ -178,28 +215,62 @@ async function renderFormCrearLiga(el) {
 // ════════════════════════════════════════════════════════════
 //  VISTA PRINCIPAL DE LA LIGA
 // ════════════════════════════════════════════════════════════
+
+let tabActual = 'tabla';
+let navListenerAdded = false; // evitar duplicar listeners en document
+
 async function abrirLiga(ligaData, el) {
   LIGA     = await getLigaById(ligaData.id);
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
+  saveState();
 
-  // Guardar snapshot al abrir la liga (datos frescos)
   await actualizarSnapshotOffline();
 
   const topbar = document.querySelector('#topbar-liga-nombre');
   if (topbar) topbar.textContent = LIGA.nombre;
 
+  tabActual = 'tabla';
+
+  // Exponer funciones globalmente para sobrevivir congelamiento de módulos ES
+  window._renderTab = renderTab;
+  window.cambiarTab = async (tab) => {
+    document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
+    if (btn) btn.classList.add('active');
+    tabActual = tab;
+
+    // Restaurar estado desde sessionStorage si se perdió
+    syncState();
+    if (!LIGA) {
+      const ligaId = localStorage.getItem('ligaActualId');
+      if (!ligaId) { window.location.reload(); return; }
+      try {
+        LIGA     = await getLigaById(ligaId);
+        equipos  = await getEquipos(ligaId);
+        partidos = await getPartidos(ligaId);
+        saveState();
+        const topbar = document.querySelector('#topbar-liga-nombre');
+        if (topbar) topbar.textContent = LIGA.nombre;
+      } catch(_) { window.location.reload(); return; }
+    }
+
+    // Usar window._renderTab para garantizar que siempre esté disponible
+    await (window._renderTab || renderTab)(tab);
+  };
+
   el.innerHTML = `
     <nav class="tab-nav" id="liga-nav">
-      <button data-tab="tabla"    class="active">Tabla</button>
-      <button data-tab="fixture"  >Fixture</button>
-      <button data-tab="partidos" >Partidos</button>
-      <button data-tab="equipos"  >Equipos</button>
-      <button data-tab="playoffs" >🏆 Playoffs</button>
-      <button data-tab="finanzas" >💰 Finanzas</button>
-      <button data-tab="config"   >⚙ Config</button>
+      <button data-tab="tabla"    onclick="cambiarTab('tabla')"    class="active">Tabla</button>
+      <button data-tab="fixture"  onclick="cambiarTab('fixture')"  >Fixture</button>
+      <button data-tab="partidos" onclick="cambiarTab('partidos')" >Partidos</button>
+      <button data-tab="equipos"  onclick="cambiarTab('equipos')"  >Equipos</button>
+      <button data-tab="playoffs" onclick="cambiarTab('playoffs')" >🏆 Playoffs</button>
+      <button data-tab="finanzas" onclick="cambiarTab('finanzas')" >💰 Finanzas</button>
+      <button data-tab="config"   onclick="cambiarTab('config')"   >⚙ Config</button>
     </nav>
     <section id="liga-content" class="section"></section>`;
+
 
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -212,14 +283,32 @@ async function abrirLiga(ligaData, el) {
   });
 
   renderTab('tabla');
+
+  // Recargar automáticamente si Edge pierde el estado al minimizar
+  if (!navListenerAdded) {
+    navListenerAdded = true;
+    const checkEstado = () => {
+      syncState();
+      if (!LIGA && document.querySelector('#liga-nav')) {
+        window.location.reload();
+      }
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkEstado();
+    });
+    window.addEventListener('focus', checkEstado);
+  }
 }
 
 async function renderTab(tab) {
   const el = getContent();
   if (!el) return;
+  syncState(); // restaurar desde window si Edge descargó el módulo
+  if (!LIGA) return;
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
   LIGA     = await getLigaById(LIGA.id);
+  saveState();
 
   if (tab === 'tabla')    renderTabla(el);
   if (tab === 'fixture')  renderFixture(el);
