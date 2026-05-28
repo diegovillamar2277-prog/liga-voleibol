@@ -257,6 +257,21 @@ async function abrirLiga(ligaData, el) {
     <section id="liga-content" class="section"></section>`;
 
   renderTab('tabla');
+
+  // Recargar automáticamente si Edge pierde el estado al minimizar
+  if (!navListenerAdded) {
+    navListenerAdded = true;
+    const checkEstado = () => {
+      syncState();
+      if (!LIGA && document.querySelector('#liga-nav')) {
+        window.location.reload();
+      }
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkEstado();
+    });
+    window.addEventListener('focus', checkEstado);
+  }
 }
 
 async function renderTab(tab) {
