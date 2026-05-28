@@ -238,7 +238,9 @@ async function abrirLiga(ligaData, el) {
     console.log("Cambiar tab");
     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
-    if (btn) btn.classList.add('active');
+    if (btn) btn.classList.add('active'); else {
+      console.log("El boton active no esta");
+    }
     tabActual = tab;
 
     // Restaurar estado desde sessionStorage si se perdió
