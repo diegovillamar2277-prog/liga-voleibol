@@ -178,6 +178,9 @@ async function renderFormCrearLiga(el) {
 // ════════════════════════════════════════════════════════════
 //  VISTA PRINCIPAL DE LA LIGA
 // ════════════════════════════════════════════════════════════
+
+let tabActual = 'tabla'; // recordar pestaña activa globalmente
+
 async function abrirLiga(ligaData, el) {
   LIGA     = await getLigaById(ligaData.id);
   equipos  = await getEquipos(LIGA.id);
@@ -188,6 +191,8 @@ async function abrirLiga(ligaData, el) {
 
   const topbar = document.querySelector('#topbar-liga-nombre');
   if (topbar) topbar.textContent = LIGA.nombre;
+
+  tabActual = 'tabla';
 
   el.innerHTML = `
     <nav class="tab-nav" id="liga-nav">
@@ -201,12 +206,23 @@ async function abrirLiga(ligaData, el) {
     </nav>
     <section id="liga-content" class="section"></section>`;
 
-  el.querySelectorAll('#liga-nav button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderTab(btn.dataset.tab);
-    });
+  // Delegación de eventos en el nav — un solo listener, siempre funciona
+  const nav = el.querySelector('#liga-nav');
+  nav.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-tab]');
+    if (!btn) return;
+    nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    tabActual = btn.dataset.tab;
+    renderTab(tabActual);
+  });
+
+  // Re-render cuando la pestaña del navegador vuelve a estar visible
+  // Evita el bug de contenido congelado al volver desde otra app
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && LIGA && getContent()) {
+      renderTab(tabActual);
+    }
   });
 
   renderTab('tabla');
