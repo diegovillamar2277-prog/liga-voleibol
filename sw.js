@@ -2,12 +2,8 @@
 //  sw.js — Service Worker v3 (offline + push)
 //  Cambiar CACHE_NAME al hacer deploy para forzar actualización
 // ============================================================
-<<<<<<< HEAD
-const CACHE = 'liga-vol-v4';
-=======
 const CACHE_NAME = 'liga-vol-v3';
 
->>>>>>> eb237fe662358888e918bc9e51bad79b9e1375df
 const PRECACHE = [
   '/',
   '/index.html',
