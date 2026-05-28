@@ -38,6 +38,8 @@ function saveState() {
   window._ligaState.LIGA     = LIGA;
   window._ligaState.equipos  = equipos;
   window._ligaState.partidos = partidos;
+  // Guardar ID en sessionStorage para recuperar si Edge pierde window
+  if (LIGA?.id) sessionStorage.setItem('ligaActualId', LIGA.id);
 }
 
 async function getPerfil() {
@@ -217,11 +219,26 @@ async function abrirLiga(ligaData, el) {
   tabActual = 'tabla';
 
   // Exponer cambiarTab globalmente para que onclick en HTML siempre funcione
-  window.cambiarTab = (tab) => {
+  window.cambiarTab = async (tab) => {
     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
     if (btn) btn.classList.add('active');
     tabActual = tab;
+
+    // Si LIGA se perdió, intentar restaurar desde sessionStorage
+    syncState();
+    if (!LIGA) {
+      const ligaId = sessionStorage.getItem('ligaActualId');
+      if (ligaId) {
+        try {
+          LIGA     = await getLigaById(ligaId);
+          equipos  = await getEquipos(ligaId);
+          partidos = await getPartidos(ligaId);
+          saveState();
+        } catch(_) { return; }
+      } else { return; }
+    }
+
     renderTab(tab);
   };
 
