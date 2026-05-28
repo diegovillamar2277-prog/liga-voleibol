@@ -218,25 +218,27 @@ async function abrirLiga(ligaData, el) {
 
   tabActual = 'tabla';
 
-  // Exponer cambiarTab globalmente para que onclick en HTML siempre funcione
+  // Exponer cambiarTab globalmente
   window.cambiarTab = async (tab) => {
     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
     if (btn) btn.classList.add('active');
     tabActual = tab;
 
-    // Si LIGA se perdió, intentar restaurar desde sessionStorage
+    // Restaurar estado desde sessionStorage si se perdió
     syncState();
     if (!LIGA) {
       const ligaId = sessionStorage.getItem('ligaActualId');
-      if (ligaId) {
-        try {
-          LIGA     = await getLigaById(ligaId);
-          equipos  = await getEquipos(ligaId);
-          partidos = await getPartidos(ligaId);
-          saveState();
-        } catch(_) { return; }
-      } else { return; }
+      if (!ligaId) { window.location.reload(); return; }
+      try {
+        LIGA     = await getLigaById(ligaId);
+        equipos  = await getEquipos(ligaId);
+        partidos = await getPartidos(ligaId);
+        saveState();
+        // Reconstruir el nav con el estado restaurado
+        const topbar = document.querySelector('#topbar-liga-nombre');
+        if (topbar) topbar.textContent = LIGA.nombre;
+      } catch(_) { window.location.reload(); return; }
     }
 
     renderTab(tab);
