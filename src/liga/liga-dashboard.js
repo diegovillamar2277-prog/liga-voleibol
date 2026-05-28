@@ -276,15 +276,15 @@ async function abrirLiga(ligaData, el) {
     <section id="liga-content" class="section"></section>`;
 
 
-  // el.querySelectorAll('#liga-nav button').forEach(btn => {
-  //   btn.addEventListener('click', () => {
-  //     console.log("Click on liga-nav");
-  //     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
-  //     btn.classList.add('active');
-  //     renderTab(btn.dataset.tab);
-  //     console.log(btn.dataset.tab);
-  //   });
-  // });
+  el.querySelectorAll('#liga-nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      console.log("Click on liga-nav");
+      document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTab(btn.dataset.tab);
+      console.log(btn.dataset.tab);
+    });
+  });
 
   renderTab('tabla');
 

@@ -16,10 +16,14 @@ const DB_NAME    = 'liga-voleibol-offline';
 const DB_VERSION = 1;
 const STORE      = 'snapshots';
 
+// Guard for environments where indexedDB is not available (e.g. Node/Vitest)
+const idb = typeof indexedDB !== 'undefined' ? indexedDB : null;
+
 // ── Abrir DB ─────────────────────────────────────────────────
 function openDB() {
+  if (!idb) return Promise.reject(new Error('indexedDB not available'));
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = idb.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -86,11 +90,12 @@ export async function clearSnapshot(ligaId) {
 
 // ── Estado de conexión ────────────────────────────────────────
 export function isOnline() {
-  return navigator.onLine;
+  return typeof navigator !== 'undefined' ? navigator.onLine : true;
 }
 
 // Llama callback(true/false) cada vez que cambia la conectividad
 export function onConnectivityChange(callback) {
+  if (typeof window === 'undefined') return;
   window.addEventListener('online',  () => callback(true));
   window.addEventListener('offline', () => callback(false));
 }
@@ -98,6 +103,7 @@ export function onConnectivityChange(callback) {
 // ── Banner offline (UI helper) ────────────────────────────────
 // Muestra/oculta un banner discreto en la parte superior
 export function setupOfflineBanner() {
+  if (typeof document === 'undefined') return;
   let banner = document.getElementById('offline-banner');
   if (!banner) {
     banner = document.createElement('div');

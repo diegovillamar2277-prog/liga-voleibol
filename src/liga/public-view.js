@@ -3,6 +3,7 @@
 // ============================================================
 import { esc, formatFecha } from '../lib/ui.js';
 import { saveSnapshot, loadSnapshot, isOnline, setupOfflineBanner } from '../lib/offline.js';
+import { sb } from '../lib/supabase.js';
 
 export async function renderPublicView(container, codigoInicial = '') {
   container.innerHTML = `
@@ -59,14 +60,8 @@ async function cargarLiga(codigo) {
   if (!el) return;
 
   try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.0');
-    const client = createClient(
-      'https://xevzdswtsbmjzchgefox.supabase.co',
-      'sb_publishable_ks-bCTiUUmxtf-FJuiL1_g_hJhUlvQy'
-    );
-
     const q = codigo.trim();
-    const { data: liga, error } = await client
+    const { data: liga, error } = await sb
       .from('leagues')
       .select('*')
       .or(`alias.eq.${q.toLowerCase()},codigo.eq.${q.toUpperCase()}`)
@@ -76,8 +71,8 @@ async function cargarLiga(codigo) {
     if (error || !liga) throw new Error('no encontrada');
 
     const [{ data: equipos }, { data: partidos }] = await Promise.all([
-      client.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
-      client.from('matches').select('*').eq('league_id', liga.id).order('fecha')
+      sb.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
+      sb.from('matches').select('*').eq('league_id', liga.id).order('fecha')
     ]);
 
     // ✅ Guardar snapshot para uso offline

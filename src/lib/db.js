@@ -1,7 +1,7 @@
 // ============================================================
 //  db.js — Capa de acceso a datos (Supabase)
 // ============================================================
-import { sb } from '../lib/supabase.js';
+import { sb } from './supabase.js';
 
 // ════════════════════════════════════════════════════════════
 //  LIGAS
@@ -101,14 +101,14 @@ export async function verificarAlias(alias, ligaId) {
 }
 
 export async function actualizarAlias(ligaId, alias) {
-  const limpio = alias.toLowerCase().replace(/[^a-z0-9-]/g, '');
-  if (!limpio) throw new Error('Alias inválido');
-  if (limpio.length < 3) throw new Error('El alias debe tener al menos 3 caracteres');
-  if (limpio.length > 20) throw new Error('El alias no puede tener más de 20 caracteres');
-  const ocupado = await verificarAlias(limpio, ligaId);
+  const normalizado = alias.toLowerCase();
+  if (normalizado.length < 3) throw new Error('El alias debe tener al menos 3 caracteres');
+  if (normalizado.length > 20) throw new Error('El alias no puede tener más de 20 caracteres');
+  if (/[^a-z0-9-]/.test(normalizado)) throw new Error('El alias solo puede contener letras minúsculas, números y guiones');
+  const ocupado = await verificarAlias(normalizado, ligaId);
   if (ocupado) throw new Error('Ese alias ya está en uso por otra liga');
-  await actualizarLiga(ligaId, { alias: limpio });
-  return limpio;
+  await actualizarLiga(ligaId, { alias: normalizado });
+  return normalizado;
 }
 
 export async function contarLigasDeUsuario(userId) {
@@ -332,4 +332,64 @@ export async function getMetricas() {
     ultimosUsuarios: ultimosUsuarios || [],
     ultimasLigas:    ultimasLigas    || [],
   };
+}
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN API — aliases requeridos por Requirement 2.3
+// ════════════════════════════════════════════════════════════
+
+export async function adminGetMetrics() {
+  return getMetricas();
+}
+
+export async function adminGetLigas() {
+  const { data, error } = await sb
+    .from('leagues')
+    .select('*, profiles!leagues_owner_id_fkey(email, nombre)')
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
+}
+
+export async function adminToggleLiga(id, activa) {
+  const { error } = await sb.from('leagues').update({ activa }).eq('id', id);
+  if (error) throw new Error('Error al actualizar liga: ' + error.message);
+}
+
+export async function adminGetUsers() {
+  const { data, error } = await sb
+    .from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
+}
+
+export async function adminCambiarRol(id, rol) {
+  const { error } = await sb.from('profiles').update({ role: rol }).eq('id', id);
+  if (error) throw new Error('Error al cambiar rol: ' + error.message);
+}
+
+export async function adminToggleUser(id, activo) {
+  const { error } = await sb.from('profiles').update({ activo }).eq('id', id);
+  if (error) throw new Error('Error al actualizar usuario: ' + error.message);
+}
+
+export async function adminGetPeticiones() {
+  const { data, error } = await sb
+    .from('join_requests')
+    .select('*, profiles(email, nombre)')
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
+}
+
+export async function adminAprobarPeticion(id) {
+  const { error } = await sb.from('join_requests').update({ estado: 'aprobada' }).eq('id', id);
+  if (error) throw new Error('Error al aprobar petición: ' + error.message);
+}
+
+export async function adminRechazarPeticion(id) {
+  const { error } = await sb.from('join_requests').update({ estado: 'rechazada' }).eq('id', id);
+  if (error) throw new Error('Error al rechazar petición: ' + error.message);
 }
