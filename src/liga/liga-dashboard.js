@@ -38,8 +38,8 @@ function saveState() {
   window._ligaState.LIGA     = LIGA;
   window._ligaState.equipos  = equipos;
   window._ligaState.partidos = partidos;
-  // Guardar ID en sessionStorage para recuperar si Edge pierde window
-  if (LIGA?.id) sessionStorage.setItem('ligaActualId', LIGA.id);
+  // Guardar ID en localStorage — sobrevive minimizar, recargas, todo
+  if (LIGA?.id) localStorage.setItem('ligaActualId', LIGA.id);
 }
 
 async function getPerfil() {
@@ -81,8 +81,22 @@ export async function renderOrgPanel(container) {
       <main id="org-main"></main>
     </div>`;
 
-  container.querySelector('#btn-logout-org').addEventListener('click', logout);
+  container.querySelector('#btn-logout-org').addEventListener('click', () => {
+    localStorage.removeItem('ligaActualId');
+    logout();
+  });
+
   const misLigas = await getMisLigas(perfil.id);
+
+  // Restaurar liga desde localStorage si Edge recargó la página
+  const ligaGuardadaId = localStorage.getItem('ligaActualId');
+  if (ligaGuardadaId) {
+    const ligaGuardada = misLigas.find(l => l.id === ligaGuardadaId);
+    if (ligaGuardada) {
+      await abrirLiga(ligaGuardada, container.querySelector('#org-main'));
+      return;
+    }
+  }
 
   if (!misLigas.length) {
     renderSinLigas(container.querySelector('#org-main'));
