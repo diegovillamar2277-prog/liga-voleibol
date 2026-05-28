@@ -203,9 +203,11 @@ async function abrirLiga(ligaData, el) {
 
   el.querySelectorAll('#liga-nav button').forEach(btn => {
     btn.addEventListener('click', () => {
+      console.log("Click on liga-nav");
       document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderTab(btn.dataset.tab);
+      console.log(btn.dataset.tab);
     });
   });
 
