@@ -219,11 +219,14 @@ async function abrirLiga(ligaData, el) {
       renderTab(tabActual);
     });
 
+    // Re-render al volver al navegador — dos eventos para cubrir todos los casos
+    const reactivar = () => {
+      if (LIGA && getContent()) renderTab(tabActual);
+    };
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && LIGA && getContent()) {
-        renderTab(tabActual);
-      }
+      if (document.visibilityState === 'visible') reactivar();
     });
+    window.addEventListener('focus', reactivar);
   }
 
   renderTab('tabla');
