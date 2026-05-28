@@ -1,7 +1,8 @@
 // ============================================================
-//  public-view.js — Vista pública por código o alias de liga (Fase 2)
+//  public-view.js — Vista pública con soporte offline
 // ============================================================
 import { esc, formatFecha } from '../lib/ui.js';
+import { saveSnapshot, loadSnapshot, isOnline, setupOfflineBanner } from '../lib/offline.js';
 
 export async function renderPublicView(container, codigoInicial = '') {
   container.innerHTML = `
@@ -21,6 +22,8 @@ export async function renderPublicView(container, codigoInicial = '') {
           : renderBuscador()}
       </div>
     </div>`;
+
+  setupOfflineBanner();
 
   container.querySelector('#btn-ir-login').onclick = () =>
     document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'login' } }));
@@ -54,6 +57,7 @@ function renderBuscador() {
 async function cargarLiga(codigo) {
   const el = document.getElementById('pub-body');
   if (!el) return;
+
   try {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.0');
     const client = createClient(
@@ -71,40 +75,60 @@ async function cargarLiga(codigo) {
 
     if (error || !liga) throw new Error('no encontrada');
 
-    const [{ data: equipos }, { data: partidos }, { data: playoffsRow }] = await Promise.all([
+    const [{ data: equipos }, { data: partidos }] = await Promise.all([
       client.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
-      client.from('matches').select('*').eq('league_id', liga.id).order('fecha'),
-      client.from('playoffs').select('data').eq('league_id', liga.id).maybeSingle(),
+      client.from('matches').select('*').eq('league_id', liga.id).order('fecha')
     ]);
 
-    // playoffsRow es el row de la tabla, y .data es el campo jsonb con el bracket
-    const playoffsData = playoffsRow?.data || null;
+    // ✅ Guardar snapshot para uso offline
+    await saveSnapshot(liga.id, {
+      liga,
+      equipos: equipos || [],
+      partidos: partidos || []
+    });
+    // Guardar también por código/alias para buscarlo sin ID
+    await saveSnapshot(`codigo:${q.toLowerCase()}`, { ligaId: liga.id, liga, equipos: equipos || [], partidos: partidos || [] });
 
     const nombreEl = document.querySelector('#pub-liga-nombre');
     if (nombreEl) nombreEl.textContent = liga.nombre;
 
-    renderLigaPublica(el, liga, equipos || [], partidos || [], playoffsData);
+    renderLigaPublica(el, liga, equipos || [], partidos || []);
+
   } catch (err) {
+    // Sin red — intentar cargar desde IndexedDB
+    if (!isOnline()) {
+      const snap = await loadSnapshot(`codigo:${codigo.trim().toLowerCase()}`);
+      if (snap && snap.liga) {
+        const nombreEl = document.querySelector('#pub-liga-nombre');
+        if (nombreEl) nombreEl.textContent = snap.liga.nombre;
+        renderLigaPublica(el, snap.liga, snap.equipos || [], snap.partidos || [], {
+          offline: true,
+          savedAt: snap.savedAt
+        });
+        return;
+      }
+    }
+    // No hay datos — mostrar error
     el.innerHTML = renderBuscador();
     const errEl = document.getElementById('buscar-error');
     if (errEl) {
-      errEl.textContent = 'Código o nombre no válido. Verifica e intenta de nuevo.';
+      errEl.textContent = isOnline()
+        ? 'Código o nombre no válido. Verifica e intenta de nuevo.'
+        : 'Sin conexión y sin datos guardados para esta liga.';
       errEl.style.display = 'block';
     }
   }
 }
 
-function renderLigaPublica(el, liga, equipos, partidos, playoffsData) {
-  const cfg = liga.config || {};
+function renderLigaPublica(el, liga, equipos, partidos, opts = {}) {
+  const cfg           = liga.config || {};
   const identificador = liga.alias || liga.codigo;
-  const tienePlayoffs = !!playoffsData;
 
   el.innerHTML = `
     <nav class="tab-nav">
-      <button data-tab="tabla"    class="active">Tabla</button>
-      <button data-tab="partidos" >Resultados</button>
-      <button data-tab="fixture"  >Fixture</button>
-      ${tienePlayoffs ? '<button data-tab="playoffs">🏆 Playoffs</button>' : ''}
+      <button data-tab="tabla" class="active">Tabla</button>
+      <button data-tab="partidos">Resultados</button>
+      <button data-tab="fixture">Fixture</button>
     </nav>
     <div style="text-align:center;margin:.5rem 0;display:flex;align-items:center;justify-content:center;gap:.6rem;flex-wrap:wrap">
       <code class="codigo-chip" style="font-size:.85rem">${identificador}</code>
@@ -112,6 +136,11 @@ function renderLigaPublica(el, liga, equipos, partidos, playoffsData) {
         ? `<span class="muted" style="font-size:.75rem">· código: ${liga.codigo}</span>`
         : ''}
       ${liga.temporada ? `<span class="muted" style="font-size:.8rem">· ${esc(liga.temporada)}</span>` : ''}
+      ${opts.offline
+        ? `<span class="badge pending" title="Datos guardados el ${new Date(opts.savedAt).toLocaleString('es-MX')}">
+            📵 Offline · ${formatFechaRelativa(opts.savedAt)}
+          </span>`
+        : ''}
     </div>
     <section id="pub-content" class="section"></section>`;
 
@@ -121,7 +150,6 @@ function renderLigaPublica(el, liga, equipos, partidos, playoffsData) {
     if (tab === 'tabla')    renderTablaPublica(content, equipos, partidos, cfg);
     if (tab === 'partidos') renderResultados(content, partidos, cfg);
     if (tab === 'fixture')  renderFixturePublico(content, equipos, partidos, cfg);
-    if (tab === 'playoffs') renderPlayoffsPublico(content, playoffsData, cfg);
   };
 
   el.querySelectorAll('.tab-nav button').forEach(btn => {
@@ -225,99 +253,6 @@ function renderFixturePublico(el, equipos, partidos, cfg) {
   el.innerHTML = html;
 }
 
-// ── Playoffs públicos ────────────────────────────────────────
-function renderPlayoffsPublico(el, bracket, cfg) {
-  if (!bracket) {
-    el.innerHTML = '<p class="empty">Los playoffs aún no han comenzado.</p>';
-    return;
-  }
-
-  if (bracket.formato === 'liguilla') {
-    renderLiguillaPublica(el, bracket);
-    return;
-  }
-
-  // Eliminación directa
-  el.innerHTML = `
-    ${bracket.campeon ? `
-      <div class="po-campeon">
-        <div class="po-campeon-trofeo">🏆</div>
-        <div class="po-campeon-titulo">Campeón</div>
-        <div class="po-campeon-nombre">${esc(bracket.campeon)}</div>
-      </div>` : ''}
-
-    <div class="bracket-wrap bracket-publico">
-      ${bracket.rondas.map(ronda => `
-        <div class="bracket-ronda">
-          <div class="bracket-ronda-nombre">${esc(ronda.nombre)}</div>
-          <div class="bracket-partidos">
-            ${ronda.partidos.map(p => `
-              <div class="bracket-partido ${p.ganador ? 'bracket-partido-jugado' : ''}">
-                <div class="bracket-equipo ${p.ganador === 'A' ? 'bracket-ganador' : ''}">
-                  <span class="bracket-equipo-nom">${p.equipoA ? esc(p.equipoA) : '<span class="muted">Por definir</span>'}</span>
-                  ${p.setsA !== null ? `<span class="bracket-sets">${p.setsA}</span>` : ''}
-                </div>
-                <div class="bracket-vs">vs</div>
-                <div class="bracket-equipo ${p.ganador === 'B' ? 'bracket-ganador' : ''}">
-                  <span class="bracket-equipo-nom">${p.equipoB && p.equipoB !== 'BYE' ? esc(p.equipoB) : p.equipoB === 'BYE' ? '<em class="muted">BYE</em>' : '<span class="muted">Por definir</span>'}</span>
-                  ${p.setsB !== null ? `<span class="bracket-sets">${p.setsB}</span>` : ''}
-                </div>
-              </div>`).join('')}
-          </div>
-        </div>`).join('')}
-    </div>`;
-}
-
-function renderLiguillaPublica(el, bracket) {
-  const tablaLig = {};
-  bracket.equipos.forEach(e => { tablaLig[e] = { equipo: e, pj: 0, pg: 0, pp: 0, pts: 0 }; });
-  bracket.partidos.filter(p => p.ganador).forEach(p => {
-    const a = tablaLig[p.equipoA], b = tablaLig[p.equipoB];
-    if (!a || !b) return;
-    a.pj++; b.pj++;
-    if (p.ganador === 'A') { a.pg++; b.pp++; a.pts += 2; }
-    else { b.pg++; a.pp++; b.pts += 2; }
-  });
-  const tablaOrdenada = Object.values(tablaLig).sort((a, b) => b.pts - a.pts || b.pg - a.pg);
-
-  el.innerHTML = `
-    ${bracket.campeon ? `
-      <div class="po-campeon">
-        <div class="po-campeon-trofeo">🏆</div>
-        <div class="po-campeon-titulo">Campeón de Liguilla</div>
-        <div class="po-campeon-nombre">${esc(bracket.campeon)}</div>
-      </div>` : ''}
-
-    <div class="tabla-wrap" style="margin-bottom:1.2rem">
-      <table class="tabla-pos">
-        <thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PP</th><th>PTS</th></tr></thead>
-        <tbody>
-          ${tablaOrdenada.map((r, i) => `
-            <tr ${i === 0 ? 'class="top-row"' : ''}>
-              <td>${i === 0 ? '🥇' : i + 1}</td>
-              <td>${esc(r.equipo)}</td>
-              <td>${r.pj}</td>
-              <td class="green">${r.pg}</td>
-              <td class="red">${r.pp}</td>
-              <td class="pts-cell">${r.pts}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="fixture-list">
-      ${bracket.partidos.map(p => `
-        <div class="fixture-item ${p.ganador ? 'jugado' : ''}">
-          <div class="fixture-teams">
-            <span class="${p.ganador === 'A' ? 'team-win' : ''}">${esc(p.equipoA)}</span>
-            <span class="fixture-vs">${p.ganador ? `${p.setsA}:${p.setsB}` : 'vs'}</span>
-            <span class="${p.ganador === 'B' ? 'team-win' : ''}">${esc(p.equipoB)}</span>
-          </div>
-          ${p.ganador ? `<span class="badge win">🏆 ${esc(p.ganador === 'A' ? p.equipoA : p.equipoB)}</span>` : ''}
-        </div>`).join('')}
-    </div>`;
-}
-
 // ── Helpers ──────────────────────────────────────────────────
 function generarFixture(noms) {
   const enc = [];
@@ -354,4 +289,16 @@ function calcularTabla(equipos, partidos, cfg) {
     if (usarSets) return (b.sg-b.sp)-(a.sg-a.sp);
     return 0;
   });
+}
+
+function formatFechaRelativa(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'hace un momento';
+  if (mins < 60) return `hace ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `hace ${hrs}h`;
+  const dias = Math.floor(hrs / 24);
+  return `hace ${dias}d`;
 }
