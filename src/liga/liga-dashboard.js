@@ -235,6 +235,7 @@ async function abrirLiga(ligaData, el) {
   // Exponer funciones globalmente para sobrevivir congelamiento de módulos ES
   window._renderTab = renderTab;
   window.cambiarTab = async (tab) => {
+    console.log("Cambiar tab");
     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`#liga-nav button[data-tab="${tab}"]`);
     if (btn) btn.classList.add('active');
@@ -243,6 +244,7 @@ async function abrirLiga(ligaData, el) {
     // Restaurar estado desde sessionStorage si se perdió
     syncState();
     if (!LIGA) {
+      console.log("No hay liga");
       const ligaId = localStorage.getItem('ligaActualId');
       if (!ligaId) { window.location.reload(); return; }
       try {
@@ -272,15 +274,15 @@ async function abrirLiga(ligaData, el) {
     <section id="liga-content" class="section"></section>`;
 
 
-  el.querySelectorAll('#liga-nav button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      console.log("Click on liga-nav");
-      document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderTab(btn.dataset.tab);
-      console.log(btn.dataset.tab);
-    });
-  });
+  // el.querySelectorAll('#liga-nav button').forEach(btn => {
+  //   btn.addEventListener('click', () => {
+  //     console.log("Click on liga-nav");
+  //     document.querySelectorAll('#liga-nav button').forEach(b => b.classList.remove('active'));
+  //     btn.classList.add('active');
+  //     renderTab(btn.dataset.tab);
+  //     console.log(btn.dataset.tab);
+  //   });
+  // });
 
   renderTab('tabla');
 
