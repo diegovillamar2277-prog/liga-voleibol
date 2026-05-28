@@ -234,7 +234,7 @@ async function abrirLiga(ligaData, el) {
 
 async function renderTab(tab) {
   const el = getContent();
-  if (!el) return;
+  if (!el) { console.error('liga-content no encontrado!'); return; }
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
   LIGA     = await getLigaById(LIGA.id);
