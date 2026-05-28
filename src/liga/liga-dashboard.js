@@ -22,20 +22,23 @@ if (!window._ligaState) {
 
 const getContent = () => document.querySelector('#liga-content');
 
-// Getters/setters que usan window._ligaState
-const getLiga    = ()  => window._ligaState.LIGA;
-const setLiga    = (v) => { window._ligaState.LIGA     = v; };
-const getEquiposState  = ()  => window._ligaState.equipos;
-const setEquiposState  = (v) => { window._ligaState.equipos  = v; };
-const getPartidosState = ()  => window._ligaState.partidos;
-const setPartidosState = (v) => { window._ligaState.partidos = v; };
+// Variables locales que siempre apuntan al estado en window
+let LIGA     = window._ligaState.LIGA;
+let equipos  = window._ligaState.equipos;
+let partidos = window._ligaState.partidos;
 
-// Compatibilidad con el código existente que usa LIGA, equipos, partidos
-Object.defineProperty(window, 'LIGA', {
-  get: () => window._ligaState.LIGA,
-  set: (v) => { window._ligaState.LIGA = v; },
-  configurable: true
-});
+// Sincronizar variables locales con window._ligaState
+function syncState() {
+  LIGA     = window._ligaState.LIGA;
+  equipos  = window._ligaState.equipos;
+  partidos = window._ligaState.partidos;
+}
+
+function saveState() {
+  window._ligaState.LIGA     = LIGA;
+  window._ligaState.equipos  = equipos;
+  window._ligaState.partidos = partidos;
+}
 
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
@@ -204,6 +207,7 @@ async function abrirLiga(ligaData, el) {
   LIGA     = await getLigaById(ligaData.id);
   equipos  = await getEquipos(LIGA.id);
   partidos = await getPartidos(LIGA.id);
+  saveState();
 
   await actualizarSnapshotOffline();
 
@@ -239,13 +243,12 @@ async function abrirLiga(ligaData, el) {
 async function renderTab(tab) {
   const el = getContent();
   if (!el) return;
-  const liga = window._ligaState.LIGA;
-  if (!liga) return;
-  window._ligaState.equipos  = await getEquipos(liga.id);
-  window._ligaState.partidos = await getPartidos(liga.id);
-  window._ligaState.LIGA     = await getLigaById(liga.id);
-  equipos  = window._ligaState.equipos;
-  partidos = window._ligaState.partidos;
+  syncState(); // restaurar desde window si Edge descargó el módulo
+  if (!LIGA) return;
+  equipos  = await getEquipos(LIGA.id);
+  partidos = await getPartidos(LIGA.id);
+  LIGA     = await getLigaById(LIGA.id);
+  saveState();
 
   if (tab === 'tabla')    renderTabla(el);
   if (tab === 'fixture')  renderFixture(el);
