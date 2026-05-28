@@ -15,11 +15,27 @@ import { toast, esc, formatFecha, confirmar } from '../lib/ui.js';
 import { saveSnapshot } from '../lib/offline.js';
 import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
 
-let LIGA     = null;
-let equipos  = [];
-let partidos = [];
+// Estado en window para sobrevivir cuando Edge descarga módulos ES
+if (!window._ligaState) {
+  window._ligaState = { LIGA: null, equipos: [], partidos: [] };
+}
 
 const getContent = () => document.querySelector('#liga-content');
+
+// Getters/setters que usan window._ligaState
+const getLiga    = ()  => window._ligaState.LIGA;
+const setLiga    = (v) => { window._ligaState.LIGA     = v; };
+const getEquiposState  = ()  => window._ligaState.equipos;
+const setEquiposState  = (v) => { window._ligaState.equipos  = v; };
+const getPartidosState = ()  => window._ligaState.partidos;
+const setPartidosState = (v) => { window._ligaState.partidos = v; };
+
+// Compatibilidad con el código existente que usa LIGA, equipos, partidos
+Object.defineProperty(window, 'LIGA', {
+  get: () => window._ligaState.LIGA,
+  set: (v) => { window._ligaState.LIGA = v; },
+  configurable: true
+});
 
 async function getPerfil() {
   const mod = await import('../auth/auth.js');
@@ -29,10 +45,12 @@ async function getPerfil() {
 // ── Actualizar snapshot offline ──────────────────────────────
 async function actualizarSnapshotOffline() {
   try {
-    const [eqs, pts] = await Promise.all([getEquipos(LIGA.id), getPartidos(LIGA.id)]);
-    await saveSnapshot(LIGA.id, { liga: LIGA, equipos: eqs, partidos: pts });
-    const key = (LIGA.alias || LIGA.codigo).toLowerCase();
-    await saveSnapshot(`codigo:${key}`, { ligaId: LIGA.id, liga: LIGA, equipos: eqs, partidos: pts });
+    const liga = window._ligaState.LIGA;
+    if (!liga) return;
+    const [eqs, pts] = await Promise.all([getEquipos(liga.id), getPartidos(liga.id)]);
+    await saveSnapshot(liga.id, { liga, equipos: eqs, partidos: pts });
+    const key = (liga.alias || liga.codigo).toLowerCase();
+    await saveSnapshot(`codigo:${key}`, { ligaId: liga.id, liga, equipos: eqs, partidos: pts });
   } catch (_) { /* offline snapshot es best-effort */ }
 }
 
@@ -221,9 +239,13 @@ async function abrirLiga(ligaData, el) {
 async function renderTab(tab) {
   const el = getContent();
   if (!el) return;
-  equipos  = await getEquipos(LIGA.id);
-  partidos = await getPartidos(LIGA.id);
-  LIGA     = await getLigaById(LIGA.id);
+  const liga = window._ligaState.LIGA;
+  if (!liga) return;
+  window._ligaState.equipos  = await getEquipos(liga.id);
+  window._ligaState.partidos = await getPartidos(liga.id);
+  window._ligaState.LIGA     = await getLigaById(liga.id);
+  equipos  = window._ligaState.equipos;
+  partidos = window._ligaState.partidos;
 
   if (tab === 'tabla')    renderTabla(el);
   if (tab === 'fixture')  renderFixture(el);
