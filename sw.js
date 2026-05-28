@@ -1,8 +1,7 @@
 // ============================================================
 //  sw.js — Service Worker v3 (offline + push)
-//  Cambiar CACHE_NAME al hacer deploy para forzar actualización
 // ============================================================
-const CACHE_NAME = 'liga-vol-v3';
+const CACHE_NAME = 'liga-vol-v4';
 
 const PRECACHE = [
   '/',
@@ -18,12 +17,12 @@ const PRECACHE = [
   '/src/lib/db.js',
   '/src/lib/ui.js',
   '/src/lib/offline.js',
+  '/src/lib/push.js',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
 
-// ── Instalar: pre-cachear archivos estáticos ─────────────────
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -32,7 +31,6 @@ self.addEventListener('install', e => {
   );
 });
 
-// ── Activar: limpiar cachés viejos ───────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -43,11 +41,13 @@ self.addEventListener('activate', e => {
   );
 });
 
-// ── Fetch: estrategia por tipo de request ────────────────────
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Supabase siempre va a la red — nunca cachear datos dinámicos
+  // Solo manejar GET — ignorar HEAD, POST, etc.
+  if (e.request.method !== 'GET') return;
+
+  // Supabase y esm.sh siempre van a la red
   if (url.hostname.includes('supabase.co') || url.hostname.includes('esm.sh')) {
     e.respondWith(
       fetch(e.request).catch(() =>
@@ -61,7 +61,6 @@ self.addEventListener('fetch', e => {
   }
 
   // Archivos propios: Network-first con fallback a caché
-  // (garantiza versión fresca, pero funciona offline)
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -75,29 +74,22 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ── Push Notifications ───────────────────────────────────────
+// Push Notifications
 self.addEventListener('push', e => {
   let data = { title: '🏐 Liga Voleibol', body: 'Nuevo partido registrado' };
-  try {
-    data = e.data ? e.data.json() : data;
-  } catch (_) {}
-
+  try { data = e.data ? e.data.json() : data; } catch (_) {}
   e.waitUntil(
     self.registration.showNotification(data.title, {
-      body:    data.body,
-      icon:    '/icons/icon-192.png',
-      badge:   '/icons/icon-192.png',
-      tag:     'partido-nuevo',          // reemplaza notif anterior del mismo tipo
+      body:     data.body,
+      icon:     '/icons/icon-192.png',
+      badge:    '/icons/icon-192.png',
+      tag:      'partido-nuevo',
       renotify: true,
-      data:    data.url || '/',
-      actions: [
-        { action: 'ver', title: 'Ver tabla' }
-      ]
+      data:     data.url || '/',
     })
   );
 });
 
-// Clic en notificación: abrir o enfocar la app
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = e.notification.data || '/';
@@ -105,9 +97,8 @@ self.addEventListener('notificationclick', e => {
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(windowClients => {
         for (const client of windowClients) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
+          if (client.url.includes(self.location.origin) && 'focus' in client)
             return client.focus();
-          }
         }
         if (clients.openWindow) return clients.openWindow(url);
       })
