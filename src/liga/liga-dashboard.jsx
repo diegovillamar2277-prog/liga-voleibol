@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
-import * as Auth from '../auth/auth.js';
 import {
   getLigaById, getMisLigas, actualizarLiga, renovarCodigo, actualizarAlias,
   getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
@@ -28,7 +27,7 @@ export function unmountOrgPanel() {
   }
 }
 
-export function renderOrgPanel(container) {
+export function renderOrgPanel(container, profile) {
   // Si el contenedor cambió (ej. navegación), desmontar el root anterior
   if (_root && _container !== container) {
     _root.unmount();
@@ -38,16 +37,14 @@ export function renderOrgPanel(container) {
     _root = createRoot(container);
     _container = container;
   }
-  _root.render(<OrgPanelApp />);
+  _root.render(<OrgPanelApp profile={profile} />);
 }
 
 // ════════════════════════════════════════════════════════════
 //  COMPONENTE RAÍZ
 // ════════════════════════════════════════════════════════════
-function OrgPanelApp() {
-  // Leer el perfil directamente del módulo auth.js — ya fue inicializado
-  // por initAuth() en main.js antes de montar este componente.
-  const currentProfile = Auth.currentProfile;
+function OrgPanelApp({ profile }) {
+  const currentProfile = profile;
 
   const [misLigas, setMisLigas]     = useState(null);
   const [ligaActual, setLigaActual] = useState(null);
