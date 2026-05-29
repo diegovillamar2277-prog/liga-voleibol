@@ -3,7 +3,7 @@ import { initAuth, currentProfile, isAdmin, isLoggedIn, logout } from './auth/au
 import { renderAuthScreen } from './auth/auth-ui.js';
 import { renderAdminPanel }  from './admin/admin.js';
 import { renderOrgPanel }    from './liga/liga-dashboard.js';
-import { renderPublicView }  from './liga/public-view.js';
+import { renderPublicView }  from './liga/public-view.jsx';
 import { showLoading, hideLoading } from './lib/ui.js';
 
 const app = document.getElementById('app');
