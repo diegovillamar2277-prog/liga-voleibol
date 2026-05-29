@@ -3,7 +3,8 @@
 // ============================================================
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AuthProvider, useAuth } from '../context/AuthContext.jsx';
+import { sb } from '../lib/supabase.js';
+import * as Auth from '../auth/auth.js';
 import {
   getLigaById, getMisLigas, actualizarLiga, renovarCodigo, actualizarAlias,
   getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
@@ -20,21 +21,20 @@ let _root = null;
 
 export function renderOrgPanel(container) {
   if (!_root) _root = createRoot(container);
-  _root.render(
-    <AuthProvider>
-      <OrgPanelApp />
-    </AuthProvider>
-  );
+  _root.render(<OrgPanelApp />);
 }
 
 // ════════════════════════════════════════════════════════════
 //  COMPONENTE RAÍZ
 // ════════════════════════════════════════════════════════════
 function OrgPanelApp() {
-  const { currentProfile, logout } = useAuth();
-  const [misLigas, setMisLigas]   = useState(null); // null = cargando
+  // Leer el perfil directamente del módulo auth.js — ya fue inicializado
+  // por initAuth() en main.js antes de montar este componente.
+  const currentProfile = Auth.currentProfile;
+
+  const [misLigas, setMisLigas]     = useState(null);
   const [ligaActual, setLigaActual] = useState(null);
-  const [screen, setScreen]       = useState('loading'); // loading | selector | sinligas | crear | liga
+  const [screen, setScreen]         = useState('loading');
 
   // Cargar ligas al montar
   useEffect(() => {
@@ -53,9 +53,10 @@ function OrgPanelApp() {
     });
   }, [currentProfile]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('ligaActualId');
-    logout();
+    await sb.auth.signOut();
+    // El onAuthStateChange en auth.js dispara 'auth-change' → main.js renderiza la vista pública
   };
 
   const abrirLiga = useCallback(liga => {
