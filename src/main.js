@@ -1,3 +1,4 @@
+import '../styles.css';
 import { initAuth, currentProfile, isAdmin, isLoggedIn, logout } from './auth/auth.js';
 import { renderAuthScreen } from './auth/auth-ui.js';
 import { renderAdminPanel }  from './admin/admin.js';
