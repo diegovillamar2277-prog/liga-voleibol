@@ -1,8 +1,8 @@
 import '../styles.css';
-import { initAuth, currentProfile, isAdmin, isLoggedIn, logout } from './auth/auth.js';
+import { initAuth, isAdmin, isLoggedIn } from './auth/auth.js';
 import { renderAuthScreen } from './auth/auth-ui.js';
 import { renderAdminPanel }  from './admin/admin.js';
-import { renderOrgPanel }    from './liga/liga-dashboard.js';
+import { renderOrgPanel }    from './liga/liga-dashboard.jsx';
 import { renderPublicView }  from './liga/public-view.jsx';
 import { showLoading, hideLoading } from './lib/ui.js';
 
@@ -16,8 +16,8 @@ async function boot() {
 }
 
 async function route() {
-  const params     = new URLSearchParams(location.search);
-  const codigoURL  = params.get('liga') || '';
+  const params    = new URLSearchParams(location.search);
+  const codigoURL = params.get('liga') || '';
 
   if (codigoURL) {
     renderPublicView(app, codigoURL);
@@ -33,7 +33,6 @@ async function route() {
     if (isAdmin()) {
       renderAdminPanel(app);
     } else {
-      // Renderizar panel — liga-dashboard restaurará la liga desde localStorage
       renderOrgPanel(app);
     }
     return;

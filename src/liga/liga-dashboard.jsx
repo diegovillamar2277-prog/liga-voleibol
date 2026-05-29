@@ -3,7 +3,7 @@
 // ============================================================
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useAuth } from '../context/AuthContext.jsx';
+import { AuthProvider, useAuth } from '../context/AuthContext.jsx';
 import {
   getLigaById, getMisLigas, actualizarLiga, renovarCodigo, actualizarAlias,
   getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
@@ -20,7 +20,11 @@ let _root = null;
 
 export function renderOrgPanel(container) {
   if (!_root) _root = createRoot(container);
-  _root.render(<OrgPanelApp />);
+  _root.render(
+    <AuthProvider>
+      <OrgPanelApp />
+    </AuthProvider>
+  );
 }
 
 // ════════════════════════════════════════════════════════════
