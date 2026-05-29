@@ -29,6 +29,20 @@ export async function renderPublicView(container, codigoInicial = '') {
   container.querySelector('#btn-ir-login').onclick = () =>
     document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'login' } }));
 
+  // Registrar buscarLiga como event listener en lugar de función global window
+  const pubBody = container.querySelector('#pub-body');
+  if (pubBody) {
+    const bindBuscador = () => {
+      const btn = pubBody.querySelector('#btn-buscar');
+      const input = pubBody.querySelector('#input-codigo');
+      if (btn) btn.addEventListener('click', () => cargarLiga(input?.value || ''));
+      if (input) input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') cargarLiga(input.value || '');
+      });
+    };
+    if (!codigoInicial) bindBuscador();
+  }
+
   if (codigoInicial) {
     await cargarLiga(codigoInicial);
   }
@@ -47,9 +61,8 @@ function renderBuscador() {
           placeholder="Ej: lachona o QMT-X59"
           maxlength="20"
           style="flex:1;font-size:1rem;padding:.65rem 1rem;border-radius:10px;
-          border:1px solid var(--border);background:var(--bg);color:var(--text)"
-          onkeydown="if(event.key==='Enter') window.buscarLiga()">
-        <button class="btn" onclick="window.buscarLiga()">Entrar</button>
+          border:1px solid var(--border);background:var(--bg);color:var(--text)">
+        <button class="btn" id="btn-buscar">Entrar</button>
       </div>
       <div id="buscar-error" class="auth-error" style="display:none;margin-top:.6rem"></div>
     </div>`;
@@ -112,6 +125,13 @@ async function cargarLiga(codigo) {
         : 'Sin conexión y sin datos guardados para esta liga.';
       errEl.style.display = 'block';
     }
+    // Re-bindear eventos del buscador
+    const btn = el.querySelector('#btn-buscar');
+    const input = el.querySelector('#input-codigo');
+    if (btn) btn.addEventListener('click', () => cargarLiga(input?.value || ''));
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') cargarLiga(input.value || '');
+    });
   }
 }
 
