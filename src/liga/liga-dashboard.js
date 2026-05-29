@@ -87,6 +87,7 @@ export async function renderOrgPanel(container) {
   });
 
   const misLigas = await getMisLigas(perfil.id);
+  
 
   // Restaurar liga desde localStorage si Edge recargó la página
   const ligaGuardadaId = localStorage.getItem('ligaActualId');
