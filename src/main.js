@@ -1,5 +1,5 @@
 import '../styles.css';
-import { initAuth, isAdmin, isLoggedIn } from './auth/auth.js';
+import { initAuth, isAdmin, isLoggedIn, currentProfile } from './auth/auth.js';
 import { renderAuthScreen } from './auth/auth-ui.js';
 import { renderAdminPanel }  from './admin/admin.js';
 import { renderOrgPanel, unmountOrgPanel } from './liga/liga-dashboard.jsx';
@@ -8,7 +8,6 @@ import { showLoading, hideLoading } from './lib/ui.js';
 
 const app = document.getElementById('app');
 
-// Desmontar React antes de cualquier render vanilla
 function cleanup() {
   unmountOrgPanel();
 }
@@ -31,6 +30,7 @@ async function route() {
   }
 
   if (isLoggedIn()) {
+    // Re-importar para obtener el currentProfile actualizado tras initAuth/login
     const mod = await import('./auth/auth.js');
     if (!mod.currentProfile) {
       cleanup();
@@ -41,7 +41,8 @@ async function route() {
       cleanup();
       renderAdminPanel(app);
     } else {
-      renderOrgPanel(app);
+      // Pasar el perfil como prop — evita leer un binding de módulo ES que puede ser null
+      renderOrgPanel(app, mod.currentProfile);
     }
     return;
   }
