@@ -18,9 +18,26 @@ import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
 
 // ── Punto de entrada (llamado desde main.js) ─────────────────
 let _root = null;
+let _container = null;
+
+export function unmountOrgPanel() {
+  if (_root) {
+    _root.unmount();
+    _root = null;
+    _container = null;
+  }
+}
 
 export function renderOrgPanel(container) {
-  if (!_root) _root = createRoot(container);
+  // Si el contenedor cambió (ej. navegación), desmontar el root anterior
+  if (_root && _container !== container) {
+    _root.unmount();
+    _root = null;
+  }
+  if (!_root) {
+    _root = createRoot(container);
+    _container = container;
+  }
   _root.render(<OrgPanelApp />);
 }
 
