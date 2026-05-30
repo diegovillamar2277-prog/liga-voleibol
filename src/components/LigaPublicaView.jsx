@@ -22,7 +22,7 @@ function TabNav({ tabs, activeTab, onTabChange }) {
 }
 
 // ── Tabla de posiciones ──────────────────────────────────────
-function TablaPublica({ equipos, partidos, cfg }) {
+function TablaPublica({ equipos = [], partidos = [], cfg = {} }) {
   const usarPts   = cfg.usarPuntos  !== false;
   const usarSets  = cfg.usarSets    !== false;
   const mostrarDS = usarSets && cfg.mostrarColDifSets !== false;
@@ -65,7 +65,7 @@ function TablaPublica({ equipos, partidos, cfg }) {
 }
 
 // ── Resultados ───────────────────────────────────────────────
-function Resultados({ partidos, cfg }) {
+function Resultados({ partidos = [], cfg = {} }) {
   const usarSets = cfg.usarSets !== false;
   const norm = partidos
     .filter(p => p.jugado && !p.es_playoff)
@@ -97,7 +97,7 @@ function Resultados({ partidos, cfg }) {
 }
 
 // ── Fixture ──────────────────────────────────────────────────
-function FixturePublico({ equipos, partidos, cfg }) {
+function FixturePublico({ equipos = [], partidos = [], cfg = {} }) {
   const vueltas = cfg.vueltas || 2;
   const noms    = equipos.map(e => e.nombre);
   const fixture = generarFixture(noms);
@@ -155,7 +155,7 @@ const TABS = [
   { id: 'playoffs', label: '🏆 Playoffs' },
 ];
 
-export default function LigaPublicaView({ liga, equipos, partidos, bracket, opts = {} }) {
+export default function LigaPublicaView({ liga, equipos = [], partidos = [], bracket = null, opts = {} }) {
   const [activeTab, setActiveTab] = useState('tabla');
   const cfg           = liga.config || {};
   const identificador = liga.alias || liga.codigo;
@@ -203,6 +203,8 @@ function generarFixture(noms) {
 }
 
 function calcularTabla(equipos, partidos, cfg) {
+  if (!Array.isArray(equipos)) equipos = [];
+  if (!Array.isArray(partidos)) partidos = [];
   const usarPts  = cfg.usarPuntos !== false;
   const usarSets = cfg.usarSets   !== false;
   const ptsV = cfg.ptsVictoria ?? 2;

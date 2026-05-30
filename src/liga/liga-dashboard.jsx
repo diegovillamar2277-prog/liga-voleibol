@@ -346,7 +346,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: TABLA
 // ════════════════════════════════════════════════════════════
-function TabTabla({ liga, equipos, partidos }) {
+function TabTabla({ liga, equipos = [], partidos = [] }) {
   const cfg      = liga.config || {};
   const usarPts  = cfg.usarPuntos  !== false;
   const usarSets = cfg.usarSets    !== false;
@@ -392,7 +392,7 @@ function TabTabla({ liga, equipos, partidos }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: FIXTURE
 // ════════════════════════════════════════════════════════════
-function TabFixture({ liga, equipos, partidos }) {
+function TabFixture({ liga, equipos = [], partidos = [] }) {
   const cfg     = liga.config || {};
   const vueltas = cfg.vueltas || 2;
   const noms    = equipos.map(e => e.nombre);
@@ -444,7 +444,7 @@ const REGLAS_DEFAULT = [
   { nombre: 'Set 3 (desempate)', puntos: 15, diferencia: 2, usarPuntosSet: true },
 ];
 
-function TabPartidos({ liga, equipos, partidos, refresh }) {
+function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   const cfg      = liga.config || {};
   const usarSets = cfg.usarSets !== false;
   const reglas   = liga.reglas?.length ? liga.reglas : REGLAS_DEFAULT;
@@ -618,7 +618,7 @@ function TabPartidos({ liga, equipos, partidos, refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: EQUIPOS
 // ════════════════════════════════════════════════════════════
-function TabEquipos({ liga, equipos, refresh }) {
+function TabEquipos({ liga, equipos = [], refresh }) {
   const [nombre, setNombre] = useState('');
 
   const agregar = async () => {
@@ -671,7 +671,7 @@ function TabEquipos({ liga, equipos, refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: FINANZAS
 // ════════════════════════════════════════════════════════════
-function TabFinanzas({ liga, equipos, partidos, refresh }) {
+function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   const cfg      = liga.config || {};
   const precioI  = cfg.precioInscripcion ?? 500;
   const precioA  = cfg.precioArbitraje   ?? 120;
@@ -784,7 +784,7 @@ function TabFinanzas({ liga, equipos, partidos, refresh }) {
   );
 }
 
-function PagoEquipo({ eq, partidos, liga, precioA, refresh }) {
+function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   const [open, setOpen]   = useState(false);
   const [monto, setMonto] = useState('');
 
@@ -1133,6 +1133,8 @@ function generarFixture(noms) {
 }
 
 function calcularTabla(equipos, partidos, cfg) {
+  if (!Array.isArray(equipos)) equipos = [];
+  if (!Array.isArray(partidos)) partidos = [];
   const usarPts  = cfg.usarPuntos !== false;
   const usarSets = cfg.usarSets   !== false;
   const ptsV = cfg.ptsVictoria ?? 2;
