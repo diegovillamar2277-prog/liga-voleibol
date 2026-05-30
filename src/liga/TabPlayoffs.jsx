@@ -114,7 +114,7 @@ function nombreRonda(rondaNum, totalRondas) {
 // ════════════════════════════════════════════════════════════
 //  COMPONENTE PRINCIPAL
 // ════════════════════════════════════════════════════════════
-export default function TabPlayoffs({ liga, equipos, partidos, refresh }) {
+export default function TabPlayoffs({ liga, equipos = [], partidos = [], refresh }) {
   const [bracket,  setBracket]  = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [editando, setEditando] = useState(null); // id del cruce en edición
@@ -363,8 +363,10 @@ function calcularTabla(equipos, partidos, cfg) {
   const ptsB = cfg.ptsBono     ?? 1;
   const ptsD = cfg.ptsDerota   ?? 0;
   const t = {};
-  equipos.forEach(e => { t[e.nombre] = { equipo: e.nombre, pj:0, pg:0, pp:0, sg:0, sp:0, pts:0 }; });
-  partidos.filter(p => p.jugado && !p.es_playoff).forEach(p => {
+  const eqs = Array.isArray(equipos) ? equipos : [];
+  const pts = Array.isArray(partidos) ? partidos : [];
+  eqs.forEach(e => { t[e.nombre] = { equipo: e.nombre, pj:0, pg:0, pp:0, sg:0, sp:0, pts:0 }; });
+  pts.filter(p => p.jugado && !p.es_playoff).forEach(p => {
     const a = t[p.equipo_a], b = t[p.equipo_b];
     if (!a || !b) return;
     a.pj++; b.pj++;
