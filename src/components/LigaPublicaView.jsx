@@ -1,17 +1,16 @@
 // ============================================================
-//  LigaPublicaView.jsx — Vista pública de liga con React TabNav
+//  LigaPublicaView.jsx — Vista pública de liga (React)
 // ============================================================
 import { useState } from 'react';
-import { esc, formatFecha } from '../lib/ui.js';
+import { formatFecha } from '../lib/ui.js';
+import PlayoffsPublico from './PlayoffsPublico.jsx';
 
-// ── TabNav component ─────────────────────────────────────────
 function TabNav({ tabs, activeTab, onTabChange }) {
   return (
     <nav className="tab-nav">
       {tabs.map(tab => (
         <button
           key={tab.id}
-          data-tab={tab.id}
           className={activeTab === tab.id ? 'active' : ''}
           onClick={() => onTabChange(tab.id)}
         >
@@ -153,9 +152,10 @@ const TABS = [
   { id: 'tabla',    label: 'Tabla'      },
   { id: 'partidos', label: 'Resultados' },
   { id: 'fixture',  label: 'Fixture'    },
+  { id: 'playoffs', label: '🏆 Playoffs' },
 ];
 
-export default function LigaPublicaView({ liga, equipos, partidos, opts = {} }) {
+export default function LigaPublicaView({ liga, equipos, partidos, bracket, opts = {} }) {
   const [activeTab, setActiveTab] = useState('tabla');
   const cfg           = liga.config || {};
   const identificador = liga.alias || liga.codigo;
@@ -167,7 +167,7 @@ export default function LigaPublicaView({ liga, equipos, partidos, opts = {} }) 
       <div style={{
         textAlign: 'center', margin: '.5rem 0',
         display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: '.6rem', flexWrap: 'wrap'
+        justifyContent: 'center', gap: '.6rem', flexWrap: 'wrap',
       }}>
         <code className="codigo-chip" style={{ fontSize: '.85rem' }}>{identificador}</code>
         {liga.alias && liga.codigo !== liga.alias && (
@@ -177,19 +177,17 @@ export default function LigaPublicaView({ liga, equipos, partidos, opts = {} }) 
           <span className="muted" style={{ fontSize: '.8rem' }}>· {liga.temporada}</span>
         )}
         {opts.offline && (
-          <span
-            className="badge pending"
-            title={`Datos guardados el ${new Date(opts.savedAt).toLocaleString('es-MX')}`}
-          >
+          <span className="badge pending" title={`Guardado el ${new Date(opts.savedAt).toLocaleString('es-MX')}`}>
             📵 Offline · {formatFechaRelativa(opts.savedAt)}
           </span>
         )}
       </div>
 
       <section className="section">
-        {activeTab === 'tabla'    && <TablaPublica  equipos={equipos} partidos={partidos} cfg={cfg} />}
-        {activeTab === 'partidos' && <Resultados    partidos={partidos} cfg={cfg} />}
-        {activeTab === 'fixture'  && <FixturePublico equipos={equipos} partidos={partidos} cfg={cfg} />}
+        {activeTab === 'tabla'    && <TablaPublica    equipos={equipos} partidos={partidos} cfg={cfg} />}
+        {activeTab === 'partidos' && <Resultados      partidos={partidos} cfg={cfg} />}
+        {activeTab === 'fixture'  && <FixturePublico  equipos={equipos} partidos={partidos} cfg={cfg} />}
+        {activeTab === 'playoffs' && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
       </section>
     </>
   );

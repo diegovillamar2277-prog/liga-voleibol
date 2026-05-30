@@ -12,6 +12,7 @@ import {
   contarLigasDeUsuario, crearLiga, enviarPeticion,
 } from '../lib/db.js';
 import { toast, formatFecha } from '../lib/ui.js';
+import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { saveSnapshot } from '../lib/offline.js';
 import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
 
@@ -334,7 +335,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
         {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
         {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
         {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
-        {activeTab === 'playoffs' && <TabPlayoffs />}
+        {activeTab === 'playoffs' && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
         {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
         {activeTab === 'config'   && <TabConfig   {...tabProps} />}
       </section>
@@ -665,18 +666,7 @@ function TabEquipos({ liga, equipos, refresh }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
-//  TAB: PLAYOFFS
-// ════════════════════════════════════════════════════════════
-function TabPlayoffs() {
-  return (
-    <div className="empty-state">
-      <div className="empty-icon">🏆</div>
-      <h2>Playoffs</h2>
-      <p className="muted">Disponible en la próxima actualización.</p>
-    </div>
-  );
-}
+// TAB: PLAYOFFS — ver TabPlayoffs.jsx
 
 // ════════════════════════════════════════════════════════════
 //  TAB: FINANZAS

@@ -1,13 +1,11 @@
 // ============================================================
-//  public-view.js — Vista pública con soporte offline
+//  public-view.jsx — Vista pública con soporte offline
 // ============================================================
 import { createRoot } from 'react-dom/client';
-import { esc, formatFecha } from '../lib/ui.js';
 import { saveSnapshot, loadSnapshot, isOnline, setupOfflineBanner } from '../lib/offline.js';
 import { sb } from '../lib/supabase.js';
 import LigaPublicaView from '../components/LigaPublicaView.jsx';
 
-// Mantener referencia al root de React para reutilizarlo
 let _reactRoot = null;
 
 export async function renderPublicView(container, codigoInicial = '') {
@@ -29,8 +27,7 @@ export async function renderPublicView(container, codigoInicial = '') {
       </div>
     </div>`;
 
-  _reactRoot = null; // reset root al re-renderizar el shell
-
+  _reactRoot = null;
   setupOfflineBanner();
 
   container.querySelector('#btn-ir-login').onclick = () =>
@@ -90,40 +87,40 @@ async function cargarLiga(codigo) {
 
     if (error || !liga) throw new Error('no encontrada');
 
-    const [{ data: equipos }, { data: partidos }] = await Promise.all([
+    const [
+      { data: equipos },
+      { data: partidos },
+      { data: playoffRow },
+    ] = await Promise.all([
       sb.from('teams').select('*').eq('league_id', liga.id).order('created_at'),
-      sb.from('matches').select('*').eq('league_id', liga.id).order('fecha')
+      sb.from('matches').select('*').eq('league_id', liga.id).order('fecha'),
+      sb.from('playoffs').select('data').eq('league_id', liga.id).maybeSingle(),
     ]);
 
-    // ✅ Guardar snapshot para uso offline
-    await saveSnapshot(liga.id, {
-      liga,
-      equipos: equipos || [],
-      partidos: partidos || []
-    });
-    // Guardar también por código/alias para buscarlo sin ID
-    await saveSnapshot(`codigo:${q.toLowerCase()}`, { ligaId: liga.id, liga, equipos: equipos || [], partidos: partidos || [] });
+    const bracket = playoffRow?.data || null;
+
+    await saveSnapshot(liga.id, { liga, equipos: equipos || [], partidos: partidos || [], bracket });
+    await saveSnapshot(`codigo:${q.toLowerCase()}`, { ligaId: liga.id, liga, equipos: equipos || [], partidos: partidos || [], bracket });
 
     const nombreEl = document.querySelector('#pub-liga-nombre');
     if (nombreEl) nombreEl.textContent = liga.nombre;
 
-    renderLigaPublica(el, liga, equipos || [], partidos || []);
+    renderLigaPublica(el, liga, equipos || [], partidos || [], bracket);
 
   } catch (err) {
-    // Sin red — intentar cargar desde IndexedDB
     if (!isOnline()) {
       const snap = await loadSnapshot(`codigo:${codigo.trim().toLowerCase()}`);
-      if (snap && snap.liga) {
+      if (snap?.liga) {
         const nombreEl = document.querySelector('#pub-liga-nombre');
         if (nombreEl) nombreEl.textContent = snap.liga.nombre;
-        renderLigaPublica(el, snap.liga, snap.equipos || [], snap.partidos || [], {
+        renderLigaPublica(el, snap.liga, snap.equipos || [], snap.partidos || [], snap.bracket || null, {
           offline: true,
-          savedAt: snap.savedAt
+          savedAt: snap.savedAt,
         });
         return;
       }
     }
-    // No hay datos — mostrar error
+
     el.innerHTML = renderBuscador();
     const errEl = document.getElementById('buscar-error');
     if (errEl) {
@@ -132,43 +129,22 @@ async function cargarLiga(codigo) {
         : 'Sin conexión y sin datos guardados para esta liga.';
       errEl.style.display = 'block';
     }
-    // Re-bindear eventos del buscador
-    const btn = el.querySelector('#btn-buscar');
-    const input = el.querySelector('#input-codigo');
-    if (btn) btn.addEventListener('click', () => cargarLiga(input?.value || ''));
-    if (input) input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') cargarLiga(input.value || '');
-    });
+    bindBuscadorEvents(el);
   }
 }
 
-function renderLigaPublica(el, liga, equipos, partidos, opts = {}) {
+function renderLigaPublica(el, liga, equipos, partidos, bracket, opts = {}) {
   const nombreEl = document.querySelector('#pub-liga-nombre');
   if (nombreEl) nombreEl.textContent = liga.nombre;
 
-  // Montar componente React en el contenedor pub-body
-  if (!_reactRoot) {
-    _reactRoot = createRoot(el);
-  }
+  if (!_reactRoot) _reactRoot = createRoot(el);
   _reactRoot.render(
     <LigaPublicaView
       liga={liga}
       equipos={equipos}
       partidos={partidos}
+      bracket={bracket}
       opts={opts}
     />
   );
-}
-
-// ── Helpers ──────────────────────────────────────────────────
-function formatFechaRelativa(iso) {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1)  return 'hace un momento';
-  if (mins < 60) return `hace ${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `hace ${hrs}h`;
-  const dias = Math.floor(hrs / 24);
-  return `hace ${dias}d`;
 }

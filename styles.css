@@ -440,6 +440,159 @@ select {
 .bracket-modal-equipo  { font-weight: 800; font-size: 1rem; text-align: center; flex: 1; min-width: 80px; }
 .bracket-modal-sep     { color: var(--muted); font-weight: 700; font-size: .85rem; }
 
+/* ── Bracket de playoffs ───────────────────────────────────── */
+.bracket-wrap {
+  display: flex;
+  gap: 1.2rem;
+  overflow-x: auto;
+  padding-bottom: 1rem;
+  align-items: flex-start;
+}
+
+.bracket-ronda {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-width: 180px;
+}
+
+.bracket-ronda-titulo {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: .4rem;
+}
+
+.bracket-cruces {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: space-around;
+  flex: 1;
+}
+
+.bracket-cruce {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  transition: border-color .15s;
+}
+
+.bracket-cruce.jugado {
+  border-color: var(--accent);
+}
+
+.bracket-cruce.pendiente {
+  opacity: .6;
+}
+
+.bracket-equipo {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .3rem .5rem;
+  border-radius: 7px;
+  transition: background .15s;
+}
+
+.bracket-equipo.ganador {
+  background: rgba(16,185,129,.12);
+}
+
+.bracket-equipo.perdedor {
+  opacity: .5;
+}
+
+.bracket-equipo-nom {
+  flex: 1;
+  font-weight: 600;
+  font-size: .88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket-sets {
+  font-weight: 800;
+  color: var(--accent);
+  font-size: .9rem;
+  min-width: 16px;
+  text-align: center;
+}
+
+.bracket-trophy {
+  font-size: .85rem;
+}
+
+.bracket-separador {
+  text-align: center;
+  font-size: .72rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.bracket-fecha {
+  font-size: .72rem;
+  color: var(--muted);
+  text-align: center;
+  margin-top: .2rem;
+}
+
+.bracket-form {
+  margin-top: .6rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Métricas admin ────────────────────────────────────────── */
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .8rem;
+  margin-bottom: .5rem;
+}
+
+.metrica-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.metrica-val {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.metrica-lbl {
+  font-size: .78rem;
+  color: var(--muted);
+  margin-top: .2rem;
+}
+
+.metrica-sub {
+  display: flex;
+  gap: .3rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: .5rem;
+}
+
+@media (max-width: 540px) {
+  .bracket-wrap { gap: .8rem; }
+  .bracket-ronda { min-width: 150px; }
+  .bracket-equipo-nom { font-size: .82rem; }
+}
+
 /* ── Campeón ─────────────────────────────────────────────────── */
 .po-campeon {
   text-align: center; padding: 2rem 1.5rem;
