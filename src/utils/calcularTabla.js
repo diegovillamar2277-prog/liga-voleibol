@@ -12,6 +12,10 @@
  * @returns {Array<{equipo: string, pj: number, pg: number, pp: number, sg: number, sp: number, pts: number}>} Sorted standings rows
  */
 export function calcularTabla(equipos, partidos, cfg) {
+  function calcularTabla(equipos, partidos, cfg) {
+  if (!Array.isArray(equipos)) equipos = [];   // ← agregar
+  if (!Array.isArray(partidos)) partidos = []; // ← agregar
+  // ... resto del código
   const usarPts  = cfg.usarPuntos !== false;
   const usarSets = cfg.usarSets   !== false;
   const ptsV = cfg.ptsVictoria ?? 2;
