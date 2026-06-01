@@ -3,7 +3,7 @@
 // ============================================================
 
 export function calcularTabla(equipos, partidos, cfg) {
-  if (!Array.isArray(equipos)) equipos = [];
+  if (!Array.isArray(equipos))  equipos  = [];
   if (!Array.isArray(partidos)) partidos = [];
   const usarPts  = cfg.usarPuntos !== false;
   const usarSets = cfg.usarSets   !== false;
