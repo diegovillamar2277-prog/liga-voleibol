@@ -1,4 +1,6 @@
 import '../styles.css';
+import { createRoot } from 'react-dom/client';
+import { ToastContainer } from './components/Toast.jsx';
 import { initAuth, isAdmin, isLoggedIn } from './auth/auth.js';
 import { renderAuthScreen, unmountAuthScreen } from './auth/auth-ui.jsx';
 import { renderAdminPanel, unmountAdminPanel } from './admin/admin.jsx';
@@ -8,7 +10,11 @@ import { showLoading, hideLoading }            from './lib/ui.js';
 
 const app = document.getElementById('app');
 
-// Desmontar todos los roots React antes de cualquier render
+// Montar ToastContainer una vez en un nodo separado
+const toastEl = document.createElement('div');
+document.body.appendChild(toastEl);
+createRoot(toastEl).render(<ToastContainer />);
+
 function cleanup() {
   unmountAuthScreen();
   unmountAdminPanel();

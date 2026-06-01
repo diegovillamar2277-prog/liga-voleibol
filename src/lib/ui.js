@@ -1,41 +1,34 @@
 // ============================================================
-//  ui.js — Utilidades de UI compartidas
+//  ui.js — Utilidades compartidas
 // ============================================================
 
-// ── Toast ────────────────────────────────────────────────────
+// ── Toast — dispara evento que ToastContainer escucha ────────
 export function toast(msg, tipo = 'ok', duracion = 3000) {
-  const el = document.createElement('div');
-  el.className = `toast toast-${tipo}`;
-  el.textContent = msg;
-  document.body.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('toast-visible'));
-  setTimeout(() => {
-    el.classList.remove('toast-visible');
-    setTimeout(() => el.remove(), 400);
-  }, duracion);
+  document.dispatchEvent(new CustomEvent('liga:toast', {
+    detail: { msg, tipo, duracion, id: Date.now() + Math.random() }
+  }));
 }
 
-// ── Loading overlay ──────────────────────────────────────────
+// ── Loading overlay (usado solo en boot antes de React) ──────
 export function showLoading(msg = 'Cargando…') {
   let el = document.getElementById('global-loading');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'global-loading';
-    el.innerHTML = `<div class="loading-inner"><div class="loading-spinner"></div><p>${msg}</p></div>`;
-    document.body.appendChild(el);
-  }
-  el.style.display = 'flex';
+  if (el) { el.style.display = 'flex'; return; }
+  el = document.createElement('div');
+  el.id = 'global-loading';
+  el.style.cssText = 'display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:1rem';
+  el.innerHTML = '<div class="spinner"></div><p class="muted">' + msg + '</p>';
+  document.body.appendChild(el);
 }
 
 export function hideLoading() {
   const el = document.getElementById('global-loading');
-  if (el) el.style.display = 'none';
+  if (el) el.remove();
 }
 
 // ── Escape HTML ──────────────────────────────────────────────
 export function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => (
-    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
 
@@ -43,15 +36,15 @@ export function esc(s) {
 export function formatFecha(iso) {
   if (!iso) return '—';
   const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// ── Confirmación simple ──────────────────────────────────────
+// ── Confirmación ─────────────────────────────────────────────
 export function confirmar(msg) {
   return window.confirm(msg);
 }
 
-// ── Generar UID local (para uso offline/temporal) ────────────
+// ── UID local ────────────────────────────────────────────────
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }

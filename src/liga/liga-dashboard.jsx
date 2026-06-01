@@ -14,7 +14,8 @@ import {
 import { toast, formatFecha } from '../lib/ui.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { saveSnapshot } from '../lib/offline.js';
-import { notifyDesdePartidoGuardado, renderPushToggle } from '../lib/push.js';
+import { notifyDesdePartidoGuardado } from '../lib/push.js';
+import PushToggle from '../components/PushToggle.jsx';
 
 // ── Punto de entrada (llamado desde main.js) ─────────────────
 let _root = null;
@@ -885,16 +886,9 @@ function TabConfig({ liga, refresh, updateLiga }) {
   const [aliasMsg, setAliasMsg] = useState({ ok: '', err: '' });
   const [miembros, setMiembros] = useState([]);
   const [invEmail, setInvEmail] = useState('');
-  const pushRef = useRef(null);
-
   useEffect(() => {
     getMiembros(liga.id).then(setMiembros);
   }, [liga.id]);
-
-  // Montar push toggle (lib legacy)
-  useEffect(() => {
-    if (pushRef.current) renderPushToggle(pushRef.current);
-  }, []);
 
   const guardarBasico = async e => {
     e.preventDefault();
@@ -1115,7 +1109,7 @@ function TabConfig({ liga, refresh, updateLiga }) {
         <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.8rem' }}>
           Recibe un aviso en este dispositivo cada vez que se registre un partido.
         </p>
-        <div ref={pushRef} />
+        <PushToggle />
       </div>
     </>
   );

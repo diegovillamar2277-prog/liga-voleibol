@@ -13,6 +13,7 @@ import {
 } from '../lib/db.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { toast, formatFecha } from '../lib/ui.js';
+import PushToggle from '../components/PushToggle.jsx';
 
 // ── Punto de entrada (llamado desde main.js) ─────────────────
 let _root = null;
