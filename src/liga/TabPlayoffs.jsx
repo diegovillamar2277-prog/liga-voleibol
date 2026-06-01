@@ -17,8 +17,8 @@ function generarBracket(equiposOrdenados, cfg = {}) {
   for (let i = 0; i < size / 2; i++) {
     cruces.push({
       id: `r1_${i}`, ronda: 1, pos: i,
-      equipoA: participantes[i]?.nombre || null,
-      equipoB: participantes[size - 1 - i]?.nombre || null,
+      equipoA: participantes[i]?.equipo || participantes[i]?.nombre || null,
+      equipoB: participantes[size - 1 - i]?.equipo || participantes[size - 1 - i]?.nombre || null,
       setsA: null, setsB: null, ganador: null, fecha: null,
     });
   }
