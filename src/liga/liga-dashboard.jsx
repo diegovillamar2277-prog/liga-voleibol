@@ -1177,10 +1177,16 @@ function calcularTabla(equipos, partidos, cfg) {
 
 function leerSets(sets, reglas) {
   const result = []; let sA = 0, sB = 0;
+  const setsParaGanar = Math.ceil(reglas.length / 2);
+
   for (let i = 0; i < reglas.length; i++) {
+    // Si ya hay ganador, no pedir más sets
+    if (sA >= setsParaGanar || sB >= setsParaGanar) break;
+
     const pA = parseInt(sets[i]?.a);
     const pB = parseInt(sets[i]?.b);
     if (isNaN(pA) || isNaN(pB)) return { ok: false, msg: `Completa el set ${i + 1}` };
+
     const r = reglas[i] || reglas[reglas.length - 1];
     if (r.usarPuntosSet !== false) {
       const max = Math.max(pA, pB), min = Math.min(pA, pB);
@@ -1190,11 +1196,9 @@ function leerSets(sets, reglas) {
     }
     result.push({ pA, pB });
     if (pA > pB) sA++; else sB++;
-    const setsParaGanar = Math.ceil(reglas.length / 2);
-    if (sA >= setsParaGanar || sB >= setsParaGanar) break;
   }
-  const setsParaGanar = Math.ceil(reglas.length / 2);
+
   const ganador = sA >= setsParaGanar ? 'A' : sB >= setsParaGanar ? 'B' : null;
-  if (!ganador) return { ok: false, msg: 'No hay ganador aún.' };
+  if (!ganador) return { ok: false, msg: 'No hay ganador aún. Completa más sets.' };
   return { ok: true, sets: result, sA, sB, ganador };
 }
