@@ -239,10 +239,16 @@ export async function getPlayoffs(ligaId) {
 }
 
 export async function guardarPlayoffs(ligaId, data) {
-  await sb.from('playoffs').upsert(
+  if (data === null) {
+    // Eliminar el registro en lugar de upsert con null
+    await sb.from('playoffs').delete().eq('league_id', ligaId);
+    return;
+  }
+  const { error } = await sb.from('playoffs').upsert(
     { league_id: ligaId, data, updated_at: new Date().toISOString() },
     { onConflict: 'league_id' }
   );
+  if (error) throw new Error('Error al guardar playoffs: ' + error.message);
 }
 
 // ════════════════════════════════════════════════════════════

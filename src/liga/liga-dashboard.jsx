@@ -353,11 +353,29 @@ function TabTabla({ liga, equipos = [], partidos = [] }) {
   const usarSets = cfg.usarSets    !== false;
   const mostrarDS = usarSets && cfg.mostrarColDifSets !== false;
   const tabla    = calcularTabla(equipos, partidos, cfg);
+  const tablaRef = useRef(null);
+
+  const exportar = async () => {
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(tablaRef.current, { backgroundColor: '#0f172a', scale: 2 });
+      const link = document.createElement('a');
+      link.download = `tabla-${liga.nombre}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      toast('Imagen descargada ✓');
+    } catch { toast('Error al exportar imagen', 'error'); }
+  };
 
   return (
     <>
-      <h2>Tabla de <span>Posiciones</span></h2>
-      <div className="tabla-wrap">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '.5rem' }}>
+        <h2 style={{ margin: 0 }}>Tabla de <span>Posiciones</span></h2>
+        <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={exportar}>
+          📷 Exportar imagen
+        </button>
+      </div>
+      <div ref={tablaRef} className="tabla-wrap">
         <table className="tabla-pos">
           <thead>
             <tr>
