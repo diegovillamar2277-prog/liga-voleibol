@@ -49,7 +49,16 @@ export default function PlayoffsPublico({ bracket, cfg = {} }) {
   }
 
   const usarSets    = cfg.usarSets !== false;
-  const totalRondas = bracket.rondas.length;
+  const totalRondas = bracket.rondas?.length ?? 0;
+
+  if (!Array.isArray(bracket.rondas) || totalRondas === 0) {
+    return (
+      <div className="empty-state" style={{ padding: '2rem 0' }}>
+        <div className="empty-icon">⚠️</div>
+        <p className="muted">El bracket tiene un formato inválido.</p>
+      </div>
+    );
+  }
 
   return (
     <div>

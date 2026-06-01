@@ -51,7 +51,18 @@ export async function register(email, password, nombre) {
 
 // ── Logout ──────────────────────────────────────────────────
 export async function logout() {
-  await sb.auth.signOut();
+  try {
+    await sb.auth.signOut();
+  } catch (_) {
+    // Ignorar errores de logout (ej: token expirado → 403)
+    // El estado local se limpia igual via onAuthStateChange
+  }
+  // Limpiar estado local por si onAuthStateChange no se dispara
+  currentUser    = null;
+  currentProfile = null;
+  document.dispatchEvent(new CustomEvent('auth-change', {
+    detail: { event: 'SIGNED_OUT', user: null, profile: null }
+  }));
 }
 
 // ── Helpers de rol ──────────────────────────────────────────

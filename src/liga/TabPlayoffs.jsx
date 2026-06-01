@@ -128,7 +128,13 @@ export default function TabPlayoffs({ liga, equipos = [], partidos = [], refresh
   const cargar = useCallback(async () => {
     setLoading(true);
     const data = await getPlayoffs(liga.id);
-    setBracket(data);
+    // Validar que el bracket tenga la estructura correcta
+    if (data && (!Array.isArray(data.rondas) || data.rondas.length === 0)) {
+      console.warn('[TabPlayoffs] bracket inválido en DB, reseteando:', data);
+      setBracket(null);
+    } else {
+      setBracket(data);
+    }
     setLoading(false);
   }, [liga.id]);
 
@@ -208,7 +214,19 @@ export default function TabPlayoffs({ liga, equipos = [], partidos = [], refresh
     );
   }
 
-  const totalRondas = bracket.rondas.length;
+  const totalRondas = bracket.rondas?.length ?? 0;
+
+  if (!Array.isArray(bracket.rondas) || totalRondas === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">⚠️</div>
+        <p className="muted">El bracket tiene un formato inválido.</p>
+        <button className="btn danger" style={{ marginTop: '1rem' }} onClick={resetBracket}>
+          🔄 Reiniciar bracket
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
