@@ -119,52 +119,173 @@ async function exportarImagen(ref, nombre) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  WIZARD DE CONFIGURACIÓN
+//  WIZARD DE CONFIGURACIÓN — paso a paso
 // ════════════════════════════════════════════════════════════
+const PASOS = ['participantes', 'formato', 'confirmacion'];
+
 function WizardConfig({ tabla, cfg, onConfirmar, onCancelar }) {
-  const maxSize  = tabla.length >= 8 ? 8 : 4;
+  const maxSize = tabla.length >= 8 ? 8 : 4;
+  const [paso,     setPaso]     = useState(0);
   const [size,     setSize]     = useState(maxSize);
   const [usarSets, setUsarSets] = useState(cfg.usarSets !== false);
+
   const participantes = tabla.slice(0, size);
+  const totalPasos    = PASOS.length;
+
+  const siguiente = () => setPaso(p => Math.min(p + 1, totalPasos - 1));
+  const anterior  = () => setPaso(p => Math.max(p - 1, 0));
 
   return (
-    <div style={{ maxWidth: 560 }}>
-      <h2>🏆 <span>Configurar Playoffs</span></h2>
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <p className="card-subtitle">Número de participantes</p>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-          {[4, 8].filter(s => s <= tabla.length).map(s => (
-            <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer' }}>
-              <input type="radio" name="size" value={s} checked={size === s} onChange={() => setSize(s)} />
-              {s} equipos
-            </label>
-          ))}
-        </div>
-
-        <p className="card-subtitle">Formato de resultado</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer', marginBottom: '1rem' }}>
-          <input type="checkbox" checked={usarSets} onChange={e => setUsarSets(e.target.checked)} />
-          Registrar sets (desactivar para solo ganador/perdedor)
-        </label>
-
-        <p className="card-subtitle">Participantes (según tabla actual)</p>
-        <div className="fixture-list" style={{ marginBottom: '1rem' }}>
-          {participantes.map((r, i) => (
-            <div key={r.equipo} className="fixture-item" style={{ gap: '.8rem' }}>
-              <span className="badge win">#{i + 1}</span>
-              <span style={{ fontWeight: 600, flex: 1 }}>{r.equipo}</span>
-              <span className="muted" style={{ fontSize: '.82rem' }}>{r.pg}G · {r.pp}P · {r.pts}pts</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', gap: '.6rem' }}>
-          <button className="btn" onClick={() => onConfirmar({ size, usarSets })}>
-            🏆 Generar bracket
+    <div style={{ maxWidth: 520, margin: '2rem auto', padding: '0 1rem' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+        <h2 style={{ margin: 0 }}>🏆 <span style={{ color: 'var(--accent)' }}>Configurar Playoffs</span></h2>
+        {onCancelar && (
+          <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={onCancelar}>
+            Cancelar
           </button>
-          <button className="btn secondary" onClick={onCancelar}>Cancelar</button>
-        </div>
+        )}
       </div>
+
+      {/* Indicador de pasos */}
+      <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+        {PASOS.map((_, i) => (
+          <div key={i} style={{
+            flex: i < PASOS.length - 1 ? 1 : 'none',
+            display: 'flex', alignItems: 'center', gap: '.4rem'
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '.75rem', fontWeight: 800,
+              background: i <= paso ? 'var(--accent)' : 'var(--card2)',
+              color: i <= paso ? '#0a0a0a' : 'var(--muted)',
+              border: `2px solid ${i <= paso ? 'var(--accent)' : 'var(--border2)'}`,
+              transition: 'all .2s',
+            }}>
+              {i < paso ? '✓' : i + 1}
+            </div>
+            {i < PASOS.length - 1 && (
+              <div style={{
+                flex: 1, height: 2,
+                background: i < paso ? 'var(--accent)' : 'var(--border2)',
+                transition: 'background .2s',
+              }} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Paso 1: Número de participantes */}
+      {paso === 0 && (
+        <div className="card">
+          <p className="card-subtitle">¿Cuántos equipos pasan a playoffs?</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem', marginBottom: '1.5rem' }}>
+            {[4, 8].filter(s => s <= tabla.length).map(s => (
+              <label key={s} style={{
+                display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer',
+                padding: '.85rem 1rem', borderRadius: 'var(--radius)',
+                border: `2px solid ${size === s ? 'var(--accent)' : 'var(--border2)'}`,
+                background: size === s ? 'var(--accent-soft)' : 'var(--bg2)',
+                transition: 'all .15s',
+              }}>
+                <input type="radio" name="size" value={s} checked={size === s}
+                  onChange={() => setSize(s)} style={{ accentColor: 'var(--accent)' }} />
+                <div>
+                  <div style={{ fontWeight: 700 }}>{s} equipos</div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--muted)' }}>
+                    {s === 4 ? 'Semifinales → Final' : 'Cuartos → Semis → Final'}
+                  </div>
+                </div>
+              </label>
+            ))}
+            {tabla.length < 4 && (
+              <p className="muted" style={{ fontSize: '.85rem' }}>
+                Se necesitan al menos 4 equipos con partidos jugados.
+              </p>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn" onClick={siguiente} disabled={tabla.length < 4}>
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Paso 2: Formato de resultado */}
+      {paso === 1 && (
+        <div className="card">
+          <p className="card-subtitle">¿Cómo se registran los resultados?</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem', marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer',
+              padding: '.85rem 1rem', borderRadius: 'var(--radius)',
+              border: `2px solid ${usarSets ? 'var(--accent)' : 'var(--border2)'}`,
+              background: usarSets ? 'var(--accent-soft)' : 'var(--bg2)',
+              transition: 'all .15s',
+            }}>
+              <input type="radio" name="formato" checked={usarSets}
+                onChange={() => setUsarSets(true)} style={{ accentColor: 'var(--accent)' }} />
+              <div>
+                <div style={{ fontWeight: 700 }}>Registrar sets</div>
+                <div style={{ fontSize: '.78rem', color: 'var(--muted)' }}>
+                  Ej: 3-1, 3-2 — muestra marcador detallado
+                </div>
+              </div>
+            </label>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer',
+              padding: '.85rem 1rem', borderRadius: 'var(--radius)',
+              border: `2px solid ${!usarSets ? 'var(--accent)' : 'var(--border2)'}`,
+              background: !usarSets ? 'var(--accent-soft)' : 'var(--bg2)',
+              transition: 'all .15s',
+            }}>
+              <input type="radio" name="formato" checked={!usarSets}
+                onChange={() => setUsarSets(false)} style={{ accentColor: 'var(--accent)' }} />
+              <div>
+                <div style={{ fontWeight: 700 }}>Solo ganador / perdedor</div>
+                <div style={{ fontSize: '.78rem', color: 'var(--muted)' }}>
+                  Sin marcador de sets
+                </div>
+              </div>
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'space-between' }}>
+            <button className="btn secondary" onClick={anterior}>← Anterior</button>
+            <button className="btn" onClick={siguiente}>Siguiente →</button>
+          </div>
+        </div>
+      )}
+
+      {/* Paso 3: Confirmación con lista de equipos */}
+      {paso === 2 && (
+        <div className="card">
+          <p className="card-subtitle">Resumen — equipos clasificados</p>
+          <div style={{ marginBottom: '1rem', display: 'flex', gap: '.6rem', flexWrap: 'wrap', fontSize: '.82rem', color: 'var(--muted)' }}>
+            <span>👥 {size} equipos</span>
+            <span>·</span>
+            <span>{usarSets ? '📊 Con sets' : '🏆 Solo ganador'}</span>
+          </div>
+          <div className="fixture-list" style={{ marginBottom: '1.2rem' }}>
+            {participantes.map((r, i) => (
+              <div key={r.equipo} className="fixture-item" style={{ gap: '.8rem' }}>
+                <span className="badge win">#{i + 1}</span>
+                <span style={{ fontWeight: 600, flex: 1 }}>{r.equipo}</span>
+                <span className="muted" style={{ fontSize: '.82rem' }}>
+                  {r.pg}G · {r.pp}P · {r.pts}pts
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'space-between' }}>
+            <button className="btn secondary" onClick={anterior}>← Anterior</button>
+            <button className="btn" onClick={() => onConfirmar({ size, usarSets })}>
+              🏆 Generar bracket
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
