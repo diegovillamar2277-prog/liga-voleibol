@@ -12,7 +12,7 @@ import {
   getPartidos, guardarPartido, actualizarPartido, eliminarPartido,
 } from '../lib/db.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
-import { TabFinanzas, TabConfig } from '../liga/liga-dashboard.jsx';
+import { TabTabla, TabFixture, TabPartidos, TabEquipos, TabFinanzas, TabConfig } from '../liga/liga-dashboard.jsx';
 import { toast, formatFecha } from '../lib/ui.js';
 import PushToggle from '../components/PushToggle.jsx';
 
@@ -499,13 +499,13 @@ function SeccionMiLiga({ profile }) {
       </nav>
 
       <div className="section" style={{ paddingTop: '1rem' }}>
-        {activeTab === 'tabla'    && <AdminTabTabla    {...tabProps} />}
-        {activeTab === 'fixture'  && <AdminTabFixture  {...tabProps} />}
-        {activeTab === 'partidos' && <AdminTabPartidos {...tabProps} />}
-        {activeTab === 'equipos'  && <AdminTabEquipos  {...tabProps} />}
-        {activeTab === 'playoffs' && <TabPlayoffs       {...tabProps} />}
-        {activeTab === 'finanzas' && <TabFinanzas       {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig         liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
+        {activeTab === 'tabla'    && <TabTabla    {...tabProps} />}
+        {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
+        {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
+        {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
+        {activeTab === 'playoffs' && <TabPlayoffs {...tabProps} />}
+        {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
+        {activeTab === 'config'   && <TabConfig   liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
       </div>
     </>
   );

@@ -347,7 +347,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: TABLA
 // ════════════════════════════════════════════════════════════
-function TabTabla({ liga, equipos = [], partidos = [] }) {
+export function TabTabla({ liga, equipos = [], partidos = [] }) {
   const cfg      = liga.config || {};
   const usarPts  = cfg.usarPuntos  !== false;
   const usarSets = cfg.usarSets    !== false;
@@ -411,7 +411,7 @@ function TabTabla({ liga, equipos = [], partidos = [] }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: FIXTURE
 // ════════════════════════════════════════════════════════════
-function TabFixture({ liga, equipos = [], partidos = [] }) {
+export function TabFixture({ liga, equipos = [], partidos = [] }) {
   const cfg     = liga.config || {};
   const vueltas = cfg.vueltas || 2;
   const noms    = equipos.map(e => e.nombre);
@@ -463,7 +463,7 @@ const REGLAS_DEFAULT = [
   { nombre: 'Set 3 (desempate)', puntos: 15, diferencia: 2, usarPuntosSet: true },
 ];
 
-function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
+export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   const cfg      = liga.config || {};
   const usarSets = cfg.usarSets !== false;
   const reglas   = liga.reglas?.length ? liga.reglas : REGLAS_DEFAULT;
@@ -663,7 +663,7 @@ function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: EQUIPOS
 // ════════════════════════════════════════════════════════════
-function TabEquipos({ liga, equipos = [], refresh }) {
+export function TabEquipos({ liga, equipos = [], refresh }) {
   const [nombre, setNombre] = useState('');
 
   const agregar = async () => {
