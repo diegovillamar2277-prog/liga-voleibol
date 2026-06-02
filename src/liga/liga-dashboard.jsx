@@ -578,11 +578,17 @@ function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
             ) : (
               <div className="sets-grid">
                 {reglas.map((r, i) => {
-                  const esD = i === reglas.length - 1 && reglas.length > 1;
+                  const esDesempate = i === reglas.length - 1 && reglas.length > 1;
+                  // Calcular sets ganados hasta ahora para mostrar/ocultar desempate
+                  const sA = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.a) > parseInt(s.b)).length;
+                  const sB = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.b) > parseInt(s.a)).length;
+                  const setsParaGanar = Math.ceil(reglas.length / 2);
+                  // Ocultar este set si ya hay ganador antes de llegar aquí
+                  if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
                   const conPts = r.usarPuntosSet !== false;
                   return (
                     <div key={i} className="set-block">
-                      <h4>{r.nombre}{esD && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}</h4>
+                      <h4>{r.nombre}{esDesempate && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}</h4>
                       <div className="set-score">
                         <input type="number" min={0} max={999} placeholder="Eq A"
                           value={sets[i]?.a || ''}
@@ -690,7 +696,7 @@ function TabEquipos({ liga, equipos = [], refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: FINANZAS
 // ════════════════════════════════════════════════════════════
-function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
+export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   const cfg      = liga.config || {};
   const precioI  = cfg.precioInscripcion ?? 500;
   const precioA  = cfg.precioArbitraje   ?? 120;
@@ -889,7 +895,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: CONFIG
 // ════════════════════════════════════════════════════════════
-function TabConfig({ liga, refresh, updateLiga }) {
+export function TabConfig({ liga, refresh, updateLiga }) {
   const cfg0 = {
     nombre: liga.nombre || '', temporada: liga.temporada || '',
     vueltas: 2, usarPuntos: true, usarSets: true,

@@ -12,6 +12,7 @@ import {
   getPartidos, guardarPartido, actualizarPartido, eliminarPartido,
 } from '../lib/db.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
+import { TabFinanzas, TabConfig } from '../liga/liga-dashboard.jsx';
 import { toast, formatFecha } from '../lib/ui.js';
 import PushToggle from '../components/PushToggle.jsx';
 
@@ -398,6 +399,8 @@ const LIGA_TABS = [
   { id: 'partidos', label: 'Partidos'    },
   { id: 'equipos',  label: 'Equipos'     },
   { id: 'playoffs', label: '🏆 Playoffs' },
+  { id: 'finanzas', label: '💰 Finanzas' },
+  { id: 'config',   label: '⚙ Config'   },
 ];
 
 const REGLAS_PRUEBA = [
@@ -501,6 +504,8 @@ function SeccionMiLiga({ profile }) {
         {activeTab === 'partidos' && <AdminTabPartidos {...tabProps} />}
         {activeTab === 'equipos'  && <AdminTabEquipos  {...tabProps} />}
         {activeTab === 'playoffs' && <TabPlayoffs       {...tabProps} />}
+        {activeTab === 'finanzas' && <TabFinanzas       {...tabProps} />}
+        {activeTab === 'config'   && <TabConfig         liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
       </div>
     </>
   );
@@ -661,19 +666,26 @@ function AdminTabPartidos({ liga, equipos, partidos, refresh }) {
               </div>
             ) : (
               <div className="sets-grid">
-                {reglas.map((r, i) => (
-                  <div key={i} className="set-block">
-                    <h4>{r.nombre}</h4>
-                    <div className="set-score">
-                      <input type="number" min={0} max={999} placeholder="Eq A" value={sets[i]?.a || ''}
-                        onChange={e => setSets(prev => prev.map((s, j) => j===i ? {...s, a: e.target.value} : s))} />
-                      <span>—</span>
-                      <input type="number" min={0} max={999} placeholder="Eq B" value={sets[i]?.b || ''}
-                        onChange={e => setSets(prev => prev.map((s, j) => j===i ? {...s, b: e.target.value} : s))} />
+                {reglas.map((r, i) => {
+                  const esDesempate = i === reglas.length - 1 && reglas.length > 1;
+                  const sA = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.a) > parseInt(s.b)).length;
+                  const sB = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.b) > parseInt(s.a)).length;
+                  const setsParaGanar = Math.ceil(reglas.length / 2);
+                  if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
+                  return (
+                    <div key={i} className="set-block">
+                      <h4>{r.nombre}{esDesempate && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}</h4>
+                      <div className="set-score">
+                        <input type="number" min={0} max={999} placeholder="Eq A" value={sets[i]?.a || ''}
+                          onChange={e => setSets(prev => prev.map((s, j) => j===i ? {...s, a: e.target.value} : s))} />
+                        <span>—</span>
+                        <input type="number" min={0} max={999} placeholder="Eq B" value={sets[i]?.b || ''}
+                          onChange={e => setSets(prev => prev.map((s, j) => j===i ? {...s, b: e.target.value} : s))} />
+                      </div>
+                      <p className="note">Mín {r.puntos} · Dif ≥ {r.diferencia}</p>
                     </div>
-                    <p className="note">Mín {r.puntos} · Dif ≥ {r.diferencia}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
