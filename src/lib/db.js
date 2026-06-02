@@ -90,6 +90,13 @@ export async function renovarCodigo(ligaId) {
   return codigoData;
 }
 
+export async function eliminarLiga(ligaId) {
+  const { error } = await sb.from('leagues').delete().eq('id', ligaId);
+  if (error) throw new Error('Error al eliminar la liga: ' + error.message);
+}
+  return codigoData;
+}
+
 export async function verificarAlias(alias, ligaId) {
   const { data } = await sb
     .from('leagues')
@@ -238,8 +245,7 @@ export async function getPlayoffs(ligaId) {
   return data?.data || null;
 }
 
-export async function guardarPlayoffs(ligaId, data) {
-  if (data === null) {
+export async function guardarPlayoffs(ligaId, data) {  if (data === null) {
     // Eliminar el registro en lugar de upsert con null
     await sb.from('playoffs').delete().eq('league_id', ligaId);
     return;

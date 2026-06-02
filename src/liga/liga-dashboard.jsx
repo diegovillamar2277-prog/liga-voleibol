@@ -9,7 +9,7 @@ import {
   getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
   getPartidos, guardarPartido, actualizarPartido, eliminarPartido,
   invitarCoAdmin, quitarMiembro, getMiembros,
-  contarLigasDeUsuario, crearLiga, enviarPeticion,
+  contarLigasDeUsuario, crearLiga, enviarPeticion, eliminarLiga,
 } from '../lib/db.js';
 import { toast, formatFecha } from '../lib/ui.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
@@ -338,7 +338,15 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
         {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
         {activeTab === 'playoffs' && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
         {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig   {...tabProps} />}
+        {activeTab === 'config'   && <TabConfig   {...tabProps} onEliminar={async () => {
+          if (!window.confirm(`¿Eliminar la liga "${liga.nombre}"? Esta acción no se puede deshacer.`)) return;
+          try {
+            await eliminarLiga(liga.id);
+            localStorage.removeItem('ligaActualId');
+            toast('Liga eliminada');
+            onVolver();
+          } catch (err) { toast(err.message, 'error'); }
+        }} onCrearNueva={onVolver} />}
       </section>
     </>
   );
@@ -915,7 +923,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
 // ════════════════════════════════════════════════════════════
 //  TAB: CONFIG
 // ════════════════════════════════════════════════════════════
-export function TabConfig({ liga, refresh, updateLiga }) {
+export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva }) {
   const cfg0 = {
     nombre: liga.nombre || '', temporada: liga.temporada || '',
     vueltas: 2, usarPuntos: true, usarSets: true,
@@ -1154,6 +1162,39 @@ export function TabConfig({ liga, refresh, updateLiga }) {
           Recibe un aviso en este dispositivo cada vez que se registre un partido.
         </p>
         <PushToggle />
+      </div>
+
+      {/* Zona de peligro */}
+      <div className="card" style={{ borderColor: 'rgba(244,63,94,.25)', marginTop: '1rem' }}>
+        <p className="card-subtitle" style={{ color: 'var(--red)' }}>⚠ Zona de peligro</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.8rem' }}>
+          {onCrearNueva && (
+            <div className="danger-row">
+              <div>
+                <strong style={{ fontSize: '.9rem' }}>Crear nueva liga</strong>
+                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>
+                  Crea otra liga en tu cuenta (máximo 2).
+                </p>
+              </div>
+              <button className="btn secondary small" onClick={onCrearNueva}>
+                + Nueva liga
+              </button>
+            </div>
+          )}
+          {onEliminar && (
+            <div className="danger-row">
+              <div>
+                <strong style={{ fontSize: '.9rem' }}>Eliminar liga</strong>
+                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>
+                  Elimina esta liga y todos sus datos permanentemente. Esta acción no se puede deshacer.
+                </p>
+              </div>
+              <button className="btn danger small" onClick={onEliminar}>
+                🗑 Eliminar liga
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
