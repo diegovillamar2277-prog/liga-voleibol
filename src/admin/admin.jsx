@@ -497,7 +497,7 @@ function SeccionMiLiga({ profile }) {
         {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
         {activeTab === 'playoffs' && <TabPlayoffs {...tabProps} />}
         {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig   liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
+        {activeTab === 'config'   && <TabConfig   liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} onEliminar={async () => { if (!window.confirm('¿Eliminar la liga de prueba? Esta acción no se puede deshacer.')) return; const { eliminarLiga } = await import('../lib/db.js'); await eliminarLiga(liga.id); setLiga(null); toast('Liga de prueba eliminada'); }} />}
       </div>
     </>
   );
