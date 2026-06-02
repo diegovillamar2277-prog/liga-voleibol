@@ -94,8 +94,6 @@ export async function eliminarLiga(ligaId) {
   const { error } = await sb.from('leagues').delete().eq('id', ligaId);
   if (error) throw new Error('Error al eliminar la liga: ' + error.message);
 }
-  return codigoData;
-}
 
 export async function verificarAlias(alias, ligaId) {
   const { data } = await sb
