@@ -243,8 +243,8 @@ export async function getPlayoffs(ligaId) {
   return data?.data || null;
 }
 
-export async function guardarPlayoffs(ligaId, data) {  if (data === null) {
-    // Eliminar el registro en lugar de upsert con null
+export async function guardarPlayoffs(ligaId, data) {
+  if (data === null) {
     await sb.from('playoffs').delete().eq('league_id', ligaId);
     return;
   }
@@ -308,7 +308,7 @@ export async function responderPeticion(id, estado) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MÉTRICAS — panel admin (Fase 2)
+//  MÉTRICAS — panel admin
 // ════════════════════════════════════════════════════════════
 
 export async function getMetricas() {
@@ -344,13 +344,7 @@ export async function getMetricas() {
   };
 }
 
-// ════════════════════════════════════════════════════════════
-//  ADMIN API — aliases requeridos por Requirement 2.3
-// ════════════════════════════════════════════════════════════
-
-export async function adminGetMetrics() {
-  return getMetricas();
-}
+export async function adminGetMetrics() { return getMetricas(); }
 
 export async function adminGetLigas() {
   const { data, error } = await sb
