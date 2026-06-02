@@ -668,10 +668,29 @@ function AdminTabPartidos({ liga, equipos, partidos, refresh }) {
               <div className="sets-grid">
                 {reglas.map((r, i) => {
                   const esDesempate = i === reglas.length - 1 && reglas.length > 1;
-                  const sA = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.a) > parseInt(s.b)).length;
-                  const sB = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.b) > parseInt(s.a)).length;
                   const setsParaGanar = Math.ceil(reglas.length / 2);
-                  if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
+
+                  if (esDesempate) {
+                    let sA = 0, sB = 0, todosCompletos = true;
+                    for (let j = 0; j < i; j++) {
+                      const pA = parseInt(sets[j]?.a);
+                      const pB = parseInt(sets[j]?.b);
+                      if (isNaN(pA) || isNaN(pB)) { todosCompletos = false; break; }
+                      if (pA > pB) sA++; else sB++;
+                    }
+                    if (!todosCompletos || sA !== sB) return null;
+                  } else {
+                    let sA = 0, sB = 0;
+                    for (let j = 0; j < i; j++) {
+                      const pA = parseInt(sets[j]?.a);
+                      const pB = parseInt(sets[j]?.b);
+                      if (!isNaN(pA) && !isNaN(pB)) {
+                        if (pA > pB) sA++; else sB++;
+                      }
+                    }
+                    if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
+                  }
+
                   return (
                     <div key={i} className="set-block">
                       <h4>{r.nombre}{esDesempate && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}</h4>

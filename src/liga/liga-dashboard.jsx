@@ -579,12 +579,32 @@ function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
               <div className="sets-grid">
                 {reglas.map((r, i) => {
                   const esDesempate = i === reglas.length - 1 && reglas.length > 1;
-                  // Calcular sets ganados hasta ahora para mostrar/ocultar desempate
-                  const sA = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.a) > parseInt(s.b)).length;
-                  const sB = sets.slice(0, i).filter((s, j) => j < i && parseInt(s.b) > parseInt(s.a)).length;
                   const setsParaGanar = Math.ceil(reglas.length / 2);
-                  // Ocultar este set si ya hay ganador antes de llegar aquí
-                  if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
+
+                  if (esDesempate) {
+                    // Calcular ganados en sets anteriores con valores completos
+                    let sA = 0, sB = 0, todosCompletos = true;
+                    for (let j = 0; j < i; j++) {
+                      const pA = parseInt(sets[j]?.a);
+                      const pB = parseInt(sets[j]?.b);
+                      if (isNaN(pA) || isNaN(pB)) { todosCompletos = false; break; }
+                      if (pA > pB) sA++; else sB++;
+                    }
+                    // Solo mostrar si todos los sets anteriores están completos Y hay empate
+                    if (!todosCompletos || sA !== sB) return null;
+                  } else {
+                    // Para sets normales, ocultar si ya hay ganador en sets anteriores
+                    let sA = 0, sB = 0;
+                    for (let j = 0; j < i; j++) {
+                      const pA = parseInt(sets[j]?.a);
+                      const pB = parseInt(sets[j]?.b);
+                      if (!isNaN(pA) && !isNaN(pB)) {
+                        if (pA > pB) sA++; else sB++;
+                      }
+                    }
+                    if (sA >= setsParaGanar || sB >= setsParaGanar) return null;
+                  }
+
                   const conPts = r.usarPuntosSet !== false;
                   return (
                     <div key={i} className="set-block">
