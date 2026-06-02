@@ -806,19 +806,19 @@ function genFixture(noms) {
 
 function leerSets(sets, reglas) {
   const result = []; let sA = 0, sB = 0;
+  const spg = Math.ceil(reglas.length / 2);
   for (let i = 0; i < reglas.length; i++) {
+    // Si ya hay ganador, no pedir más sets
+    if (sA >= spg || sB >= spg) break;
     const pA = parseInt(sets[i]?.a), pB = parseInt(sets[i]?.b);
-    if (isNaN(pA)||isNaN(pB)) return { ok:false, msg:`Completa el set ${i+1}` };
+    if (isNaN(pA) || isNaN(pB)) return { ok: false, msg: `Completa el set ${i + 1}` };
     const r = reglas[i];
-    const max=Math.max(pA,pB), min=Math.min(pA,pB);
-    if (max<r.puntos||(max-min)<r.diferencia) return { ok:false, msg:`Set ${i+1} inválido: ${pA}-${pB}` };
-    result.push({pA,pB});
-    if (pA>pB) sA++; else sB++;
-    const spg = Math.ceil(reglas.length/2);
-    if (sA>=spg||sB>=spg) break;
+    const max = Math.max(pA, pB), min = Math.min(pA, pB);
+    if (max < r.puntos || (max - min) < r.diferencia) return { ok: false, msg: `Set ${i + 1} inválido: ${pA}-${pB}` };
+    result.push({ pA, pB });
+    if (pA > pB) sA++; else sB++;
   }
-  const spg = Math.ceil(reglas.length/2);
-  const ganador = sA>=spg?'A':sB>=spg?'B':null;
-  if (!ganador) return { ok:false, msg:'No hay ganador aún.' };
-  return { ok:true, sets:result, sA, sB, ganador };
+  const ganador = sA >= spg ? 'A' : sB >= spg ? 'B' : null;
+  if (!ganador) return { ok: false, msg: 'No hay ganador aún.' };
+  return { ok: true, sets: result, sA, sB, ganador };
 }
