@@ -96,63 +96,28 @@ function Resultados({ partidos = [], cfg = {} }) {
   );
 }
 
-// ── Fixture ──────────────────────────────────────────────────
-function FixturePublico({ equipos = [], partidos = [], cfg = {} }) {
-  const vueltas = cfg.vueltas || 2;
-  const noms    = equipos.map(e => e.nombre);
-  const fixture = generarFixture(noms);
-
-  if (!noms.length) return <p className="empty">No hay equipos.</p>;
-
+// ── Programación (en mantenimiento) ─────────────────────────
+function Programacion() {
   return (
-    <>
-      {Array.from({ length: vueltas }, (_, idx) => {
-        const v = idx + 1;
-        return (
-          <div key={v}>
-            <h3 style={{ margin: '1.2rem 0 .6rem' }}>Vuelta {v}</h3>
-            <div className="fixture-list">
-              {fixture.map((enc, i) => {
-                const eA = v === 1 ? enc.local : enc.visitante;
-                const eB = v === 1 ? enc.visitante : enc.local;
-                const p  = partidos.find(x =>
-                  !x.es_playoff && x.vuelta === v &&
-                  ((x.equipo_a === eA && x.equipo_b === eB) ||
-                   (x.equipo_a === eB && x.equipo_b === eA))
-                );
-                return (
-                  <div key={i} className={`fixture-item ${p?.jugado ? 'jugado' : ''}`}>
-                    <span className={`badge ${v === 1 ? 'pending' : 'done'}`}>V{v}</span>
-                    <div className="fixture-teams">
-                      <span>{eA}</span>
-                      <span className="fixture-vs">
-                        {p?.jugado ? `${p.sets_a}:${p.sets_b}` : 'vs'}
-                      </span>
-                      <span>{eB}</span>
-                    </div>
-                    {p?.fecha && <span className="fixture-date">{formatFecha(p.fecha)}</span>}
-                    {p?.jugado && (
-                      <span className="badge win">
-                        🏆 {p.ganador === 'A' ? p.equipo_a : p.equipo_b}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </>
+    <div className="empty-state" style={{ padding: '3rem 1rem' }}>
+      <div className="empty-icon">🔧</div>
+      <h2>Programación</h2>
+      <p className="muted" style={{ marginTop: '.5rem' }}>
+        Esta sección está en mantenimiento.<br />Pronto podrás ver los próximos partidos aquí.
+      </p>
+      <span className="badge pending" style={{ marginTop: '1rem', fontSize: '.82rem', padding: '.35rem .8rem' }}>
+        En mantenimiento
+      </span>
+    </div>
   );
 }
 
 // ── Componente principal ─────────────────────────────────────
 const TABS = [
-  { id: 'tabla',    label: 'Tabla'      },
-  { id: 'partidos', label: 'Resultados' },
-  { id: 'fixture',  label: 'Fixture'    },
-  { id: 'playoffs', label: '🏆 Playoffs' },
+  { id: 'tabla',        label: 'Tabla'          },
+  { id: 'partidos',     label: 'Resultados'     },
+  { id: 'programacion', label: 'Programación'   },
+  { id: 'playoffs',     label: '🏆 Playoffs'    },
 ];
 
 export default function LigaPublicaView({ liga, equipos = [], partidos = [], bracket = null, opts = {} }) {
@@ -184,10 +149,10 @@ export default function LigaPublicaView({ liga, equipos = [], partidos = [], bra
       </div>
 
       <section className="section">
-        {activeTab === 'tabla'    && <TablaPublica    equipos={equipos} partidos={partidos} cfg={cfg} />}
-        {activeTab === 'partidos' && <Resultados      partidos={partidos} cfg={cfg} />}
-        {activeTab === 'fixture'  && <FixturePublico  equipos={equipos} partidos={partidos} cfg={cfg} />}
-        {activeTab === 'playoffs' && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
+        {activeTab === 'tabla'        && <TablaPublica equipos={equipos} partidos={partidos} cfg={cfg} />}
+        {activeTab === 'partidos'     && <Resultados   partidos={partidos} cfg={cfg} />}
+        {activeTab === 'programacion' && <Programacion />}
+        {activeTab === 'playoffs'     && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
       </section>
     </>
   );
