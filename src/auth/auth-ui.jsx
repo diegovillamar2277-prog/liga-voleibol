@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { login, register } from './auth.js';
 
-// ── Punto de entrada (llamado desde main.js) ─────────────────
 let _root = null;
 let _container = null;
 
@@ -28,16 +27,16 @@ export function renderAuthScreen(container) {
 //  COMPONENTE
 // ════════════════════════════════════════════════════════════
 function AuthScreen() {
-  const [tab, setTab]         = useState('login');
-  const [email, setEmail]     = useState('');
-  const [pass, setPass]       = useState('');
-  const [nombre, setNombre]   = useState('');
+  const [tab, setTab]           = useState('login');
+  const [email, setEmail]       = useState('');
+  const [pass, setPass]         = useState('');
+  const [nombre, setNombre]     = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPass, setRegPass]   = useState('');
-  const [error, setError]     = useState('');
+  const [error, setError]       = useState('');
   const [regError, setRegError] = useState('');
-  const [regOk, setRegOk]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [regOk, setRegOk]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   const handleLogin = async e => {
     e.preventDefault();
@@ -66,14 +65,10 @@ function AuthScreen() {
     }
   };
 
-  const irACodigo = e => {
-    e.preventDefault();
-    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'codigo' } }));
-  };
-
+  // Vuelve a la vista pública (buscador de liga)
   const irAInicio = e => {
     e.preventDefault();
-    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'home' } }));
+    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'codigo' } }));
   };
 
   return (
@@ -136,15 +131,9 @@ function AuthScreen() {
           </form>
         )}
 
-        <div className="auth-footer-links">
-          <p className="auth-footer">
-            ¿Solo quieres ver tu liga?{' '}
-            <a href="#" onClick={irACodigo}>Ingresa con código →</a>
-          </p>
-          <p className="auth-footer" style={{ marginTop: '.4rem' }}>
-            <a href="#" onClick={irAInicio}>← Volver al inicio</a>
-          </p>
-        </div>
+        <p className="auth-footer" style={{ marginTop: '1.2rem' }}>
+          <a href="#" onClick={irAInicio}>← Ver liga sin iniciar sesión</a>
+        </p>
       </div>
     </div>
   );
