@@ -10,6 +10,10 @@ import LigaPublicaView from '../components/LigaPublicaView.jsx';
 let _root = null;
 let _container = null;
 
+export function unmountPublicView() {
+  if (_root) { _root.unmount(); _root = null; _container = null; }
+}
+
 export function renderPublicView(container, codigoInicial = '') {
   if (_root && _container !== container) {
     _root.unmount(); _root = null;
@@ -29,7 +33,7 @@ function PublicViewApp({ codigoInicial }) {
   const [estado, setEstado] = useState(
     codigoInicial ? 'cargando' : 'buscador'
   ); // buscador | cargando | liga | error
-  const [datos,  setDatos]  = useState(null); // { liga, equipos, partidos, bracket, opts }
+  const [datos,  setDatos]  = useState(null);
   const [codigo, setCodigo] = useState('');
   const [error,  setError]  = useState('');
 
@@ -63,7 +67,6 @@ function PublicViewApp({ codigoInicial }) {
 
       const bracket = playoffRow?.data || null;
 
-      // Guardar snapshot offline
       try {
         await saveSnapshot(liga.id, { liga, equipos: equipos || [], partidos: partidos || [], bracket });
         await saveSnapshot(`codigo:${trimmed.toLowerCase()}`, { ligaId: liga.id, liga, equipos: equipos || [], partidos: partidos || [], bracket });
@@ -73,7 +76,6 @@ function PublicViewApp({ codigoInicial }) {
       setEstado('liga');
 
     } catch (err) {
-      // Intentar offline
       if (!isOnline()) {
         const snap = await loadSnapshot(`codigo:${trimmed.toLowerCase()}`);
         if (snap?.liga) {
@@ -95,7 +97,6 @@ function PublicViewApp({ codigoInicial }) {
     }
   }, []);
 
-  // Cargar liga inicial si viene en la URL
   useEffect(() => {
     if (codigoInicial) cargarLiga(codigoInicial);
   }, [codigoInicial, cargarLiga]);
@@ -154,7 +155,7 @@ function Buscador({ codigo, onChange, onBuscar, error }) {
       <div style={{ display: 'flex', gap: '.6rem' }}>
         <input
           type="text"
-          placeholder="Ej: lachona o QMT-X59"
+          placeholder="código o nombre-corto"
           maxLength={20}
           value={codigo}
           onChange={e => onChange(e.target.value)}
