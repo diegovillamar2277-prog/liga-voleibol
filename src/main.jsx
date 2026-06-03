@@ -2,11 +2,11 @@ import '../styles.css';
 import { createRoot } from 'react-dom/client';
 import { ToastContainer } from './components/Toast.jsx';
 import { initAuth, isAdmin, isLoggedIn } from './auth/auth.js';
-import { renderAuthScreen, unmountAuthScreen } from './auth/auth-ui.jsx';
-import { renderAdminPanel, unmountAdminPanel } from './admin/admin.jsx';
-import { renderOrgPanel, unmountOrgPanel }     from './liga/liga-dashboard.jsx';
-import { renderPublicView }                    from './liga/public-view.jsx';
-import { showLoading, hideLoading }            from './lib/ui.js';
+import { renderAuthScreen, unmountAuthScreen }   from './auth/auth-ui.jsx';
+import { renderAdminPanel, unmountAdminPanel }   from './admin/admin.jsx';
+import { renderOrgPanel,   unmountOrgPanel }     from './liga/liga-dashboard.jsx';
+import { renderPublicView, unmountPublicView }   from './liga/public-view.jsx';
+import { showLoading, hideLoading }              from './lib/ui.js';
 
 const app = document.getElementById('app');
 
@@ -15,10 +15,14 @@ const toastEl = document.createElement('div');
 document.body.appendChild(toastEl);
 createRoot(toastEl).render(<ToastContainer />);
 
+// Desmontar TODOS los roots antes de renderizar otro
+// Esto evita que roots zombie impidan que los botones funcionen
+// tras navegar de vuelta a la app
 function cleanup() {
   unmountAuthScreen();
   unmountAdminPanel();
   unmountOrgPanel();
+  unmountPublicView();
 }
 
 async function boot() {
