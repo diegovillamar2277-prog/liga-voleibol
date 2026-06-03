@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 //  admin.jsx — Panel de administrador (React)
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +11,7 @@ import {
   getLigaById, getEquipos, getPartidos,
 } from '../lib/db.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
-import { TabTabla, TabFixture, TabPartidos, TabEquipos, TabFinanzas, TabConfig } from '../liga/liga-dashboard.jsx';
+import { TabTabla, TabFixture, TabPartidos, TabEquipos, TabFinanzas, TabConfig, TabComentarios } from '../liga/liga-dashboard.jsx';
 import { toast, formatFecha } from '../lib/ui.js';
 import PushToggle from '../components/PushToggle.jsx';
 
@@ -388,13 +388,14 @@ function estadoBadge(e) {
 // ════════════════════════════════════════════════════════════
 // Tabs disponibles para la liga del admin — idénticos al organizador
 const LIGA_TABS = [
-  { id: 'tabla',    label: 'Tabla'       },
-  { id: 'fixture',  label: 'Fixture'     },
-  { id: 'partidos', label: 'Partidos'    },
-  { id: 'equipos',  label: 'Equipos'     },
-  { id: 'playoffs', label: '🏆 Playoffs' },
-  { id: 'finanzas', label: '💰 Finanzas' },
-  { id: 'config',   label: '⚙ Config'   },
+  { id: 'tabla',       label: 'Tabla'          },
+  { id: 'fixture',     label: 'Fixture'        },
+  { id: 'partidos',    label: 'Partidos'       },
+  { id: 'equipos',     label: 'Equipos'        },
+  { id: 'playoffs',    label: '🏆 Playoffs'    },
+  { id: 'finanzas',    label: '💰 Finanzas'    },
+  { id: 'comentarios', label: '💬 Comentarios' },
+  { id: 'config',      label: '⚙ Config'      },
 ];
 
 const REGLAS_PRUEBA = [
@@ -491,13 +492,14 @@ function SeccionMiLiga({ profile }) {
         ))}
       </nav>
       <div className="section" style={{ paddingTop: '1rem' }}>
-        {activeTab === 'tabla'    && <TabTabla    {...tabProps} />}
-        {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
-        {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
-        {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
-        {activeTab === 'playoffs' && <TabPlayoffs {...tabProps} />}
-        {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig   liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} onEliminar={async () => { if (!window.confirm('¿Eliminar la liga de prueba? Esta acción no se puede deshacer.')) return; const { eliminarLiga } = await import('../lib/db.js'); await eliminarLiga(liga.id); setLiga(null); toast('Liga de prueba eliminada'); }} />}
+        {activeTab === 'tabla'       && <TabTabla      {...tabProps} />}
+        {activeTab === 'fixture'     && <TabFixture    {...tabProps} />}
+        {activeTab === 'partidos'    && <TabPartidos   {...tabProps} />}
+        {activeTab === 'equipos'     && <TabEquipos    {...tabProps} />}
+        {activeTab === 'playoffs'    && <TabPlayoffs   {...tabProps} />}
+        {activeTab === 'finanzas'    && <TabFinanzas   {...tabProps} />}
+        {activeTab === 'comentarios' && <TabComentarios liga={liga} />}
+        {activeTab === 'config'      && <TabConfig     liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
       </div>
     </>
   );
