@@ -10,6 +10,7 @@ import {
   getPartidos, guardarPartido, actualizarPartido, eliminarPartido,
   invitarCoAdmin, quitarMiembro, getMiembros,
   contarLigasDeUsuario, crearLiga, enviarPeticion, eliminarLiga,
+  getComentarios, eliminarComentario,
 } from '../lib/db.js';
 import { toast, formatFecha } from '../lib/ui.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
@@ -30,6 +31,7 @@ export function unmountOrgPanel() {
 }
 
 export function renderOrgPanel(container, profile) {
+  // Si el contenedor cambió (ej. navegación), desmontar el root anterior
   if (_root && _container !== container) {
     _root.unmount();
     _root = null;
@@ -51,10 +53,12 @@ function OrgPanelApp({ profile }) {
   const [ligaActual, setLigaActual] = useState(null);
   const [screen, setScreen]         = useState('loading');
 
+  // Cargar ligas al montar
   useEffect(() => {
     if (!currentProfile) return;
     getMisLigas(currentProfile.id).then(ligas => {
       setMisLigas(ligas);
+      // Restaurar liga desde localStorage
       const savedId = localStorage.getItem('ligaActualId');
       if (savedId) {
         const saved = ligas.find(l => l.id === savedId);
@@ -69,6 +73,7 @@ function OrgPanelApp({ profile }) {
   const handleLogout = async () => {
     localStorage.removeItem('ligaActualId');
     await sb.auth.signOut();
+    // El onAuthStateChange en auth.js dispara 'auth-change' → main.js renderiza la vista pública
   };
 
   const abrirLiga = useCallback(liga => {
@@ -261,13 +266,14 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
 //  PANEL PRINCIPAL DE LA LIGA
 // ════════════════════════════════════════════════════════════
 const TABS = [
-  { id: 'tabla',    label: 'Tabla'       },
-  { id: 'fixture',  label: 'Fixture'     },
-  { id: 'partidos', label: 'Partidos'    },
-  { id: 'equipos',  label: 'Equipos'     },
-  { id: 'playoffs', label: '🏆 Playoffs' },
-  { id: 'finanzas', label: '💰 Finanzas' },
-  { id: 'config',   label: '⚙ Config'   },
+  { id: 'tabla',        label: 'Tabla'          },
+  { id: 'fixture',      label: 'Fixture'        },
+  { id: 'partidos',     label: 'Partidos'       },
+  { id: 'equipos',      label: 'Equipos'        },
+  { id: 'playoffs',     label: '🏆 Playoffs'    },
+  { id: 'finanzas',     label: '💰 Finanzas'    },
+  { id: 'comentarios',  label: '💬 Comentarios' },
+  { id: 'config',       label: '⚙ Config'      },
 ];
 
 function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
@@ -287,6 +293,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
     setEquipos(eqs);
     setPartidos(pts);
     setLoading(false);
+    // Snapshot offline
     try {
       await saveSnapshot(l.id, { liga: l, equipos: eqs, partidos: pts });
       const key = (l.alias || l.codigo).toLowerCase();
@@ -296,6 +303,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  // Actualizar nombre en topbar cuando liga.nombre cambia
   useEffect(() => {
     if (liga?.nombre) onNombreChange(liga.nombre);
   }, [liga?.nombre]);
@@ -326,13 +334,14 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
         ))}
       </nav>
       <section className="section">
-        {activeTab === 'tabla'    && <TabTabla    {...tabProps} />}
-        {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
-        {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
-        {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
-        {activeTab === 'playoffs' && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
-        {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig   {...tabProps} onEliminar={async () => {
+        {activeTab === 'tabla'        && <TabTabla    {...tabProps} />}
+        {activeTab === 'fixture'      && <TabFixture  {...tabProps} />}
+        {activeTab === 'partidos'     && <TabPartidos {...tabProps} />}
+        {activeTab === 'equipos'      && <TabEquipos  {...tabProps} />}
+        {activeTab === 'playoffs'     && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
+        {activeTab === 'finanzas'     && <TabFinanzas {...tabProps} />}
+        {activeTab === 'comentarios'  && <TabComentarios liga={liga} />}
+        {activeTab === 'config'       && <TabConfig   {...tabProps} onEliminar={async () => {
           if (!window.confirm(`¿Eliminar la liga "${liga.nombre}"? Esta acción no se puede deshacer.`)) return;
           try {
             await eliminarLiga(liga.id);
@@ -350,12 +359,12 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
 //  TAB: TABLA
 // ════════════════════════════════════════════════════════════
 export function TabTabla({ liga, equipos = [], partidos = [] }) {
-  const cfg       = liga.config || {};
-  const usarPts   = cfg.usarPuntos  !== false;
-  const usarSets  = cfg.usarSets    !== false;
+  const cfg      = liga.config || {};
+  const usarPts  = cfg.usarPuntos  !== false;
+  const usarSets = cfg.usarSets    !== false;
   const mostrarDS = usarSets && cfg.mostrarColDifSets !== false;
-  const tabla     = calcularTabla(equipos, partidos, cfg);
-  const tablaRef  = useRef(null);
+  const tabla    = calcularTabla(equipos, partidos, cfg);
+  const tablaRef = useRef(null);
 
   const exportar = async () => {
     try {
@@ -437,7 +446,7 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
           return { eA, eB, p, i };
         });
 
-        // Pendientes primero, jugados al final
+        // Pendientes primero, jugados al final (dentro de cada grupo: orden original)
         const pendientes = encuentros.filter(e => !e.p?.jugado);
         const jugados    = encuentros.filter(e =>  e.p?.jugado);
         const ordenados  = [...pendientes, ...jugados];
@@ -493,12 +502,13 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   const reglas   = liga.reglas?.length ? liga.reglas : REGLAS_DEFAULT;
   const norm     = partidos.filter(p => !p.es_playoff);
 
-  const [vuelta,    setVuelta]    = useState(1);
-  const [fecha,     setFecha]     = useState('');
-  const [eqA,       setEqA]       = useState('');
-  const [eqB,       setEqB]       = useState('');
+  const [vuelta,   setVuelta]   = useState(1);
+  const [fecha,    setFecha]    = useState('');
+  const [eqA,      setEqA]      = useState('');
+  const [eqB,      setEqB]      = useState('');
   const [ganSimple, setGanSimple] = useState('');
-  const [sets,      setSets]      = useState(() => reglas.map(() => ({ a: '', b: '' })));
+  // sets como array de { a: string, b: string }
+  const [sets, setSets] = useState(() => reglas.map(() => ({ a: '', b: '' })));
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -534,6 +544,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
       });
       toast(`✓ ${eqA} ${sA}:${sB} ${eqB}`);
       await notifyDesdePartidoGuardado(liga, guardado);
+      // reset form
       setFecha(''); setEqA(''); setEqB(''); setGanSimple('');
       setSets(reglas.map(() => ({ a: '', b: '' })));
       refresh();
@@ -583,6 +594,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
             </div>
           </div>
 
+          {/* Sets o ganador simple */}
           <div style={{ marginTop: '1rem' }}>
             {!usarSets ? (
               <div className="set-block">
@@ -599,10 +611,11 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
             ) : (
               <div className="sets-grid">
                 {reglas.map((r, i) => {
-                  const esDesempate   = i === reglas.length - 1 && reglas.length > 1;
+                  const esDesempate = i === reglas.length - 1 && reglas.length > 1;
                   const setsParaGanar = Math.ceil(reglas.length / 2);
 
                   if (esDesempate) {
+                    // Calcular ganados en sets anteriores con valores completos
                     let sA = 0, sB = 0, todosCompletos = true;
                     for (let j = 0; j < i; j++) {
                       const pA = parseInt(sets[j]?.a);
@@ -610,8 +623,10 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
                       if (isNaN(pA) || isNaN(pB)) { todosCompletos = false; break; }
                       if (pA > pB) sA++; else sB++;
                     }
+                    // Solo mostrar si todos los sets anteriores están completos Y hay empate
                     if (!todosCompletos || sA !== sB) return null;
                   } else {
+                    // Para sets normales, ocultar si ya hay ganador en sets anteriores
                     let sA = 0, sB = 0;
                     for (let j = 0; j < i; j++) {
                       const pA = parseInt(sets[j]?.a);
@@ -744,18 +759,18 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   const inscPend = equipos.length - inscPag;
 
   // ── Cálculos de arbitraje ──────────────────────────────────
-  // Cobrado en partidos: partidos con pago_arb marcado = true
+  // Cobrado en partidos: partidos jugados con pago_arb marcado = true
   const arbCobPartidos = norm.reduce((s, p) =>
     s + (p.pago_arb_a ? precioA : 0) + (p.pago_arb_b ? precioA : 0), 0);
 
-  // Saldo adelantado total: dinero recibido aún no asignado a partido específico
+  // Saldo adelantado total en caja (dinero recibido, aún no asignado a partido)
   const arbAdelantadoTotal = equipos.reduce((s, e) => s + (e.arb_saldo || 0), 0);
 
-  // Total cobrado real = partidos marcados pagados + saldos en caja
+  // Total recibido de arbitrajes = cobrado en partidos + saldo en caja
   const arbCobTotal = arbCobPartidos + arbAdelantadoTotal;
 
-  // Pendiente real: por cada equipo, deuda de sus partidos jugados menos su saldo propio
-  // (el saldo de equipo A NO cancela deuda de equipo B)
+  // Pendiente real por equipo = partidos jugados no pagados - saldo disponible de ESE equipo
+  // (el saldo de un equipo no cancela deudas de otro)
   const arbPendTotal = equipos.reduce((suma, eq) => {
     const partidosPendEq = norm.filter(p =>
       (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
@@ -876,32 +891,34 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   );
 }
 
-function PagoEquipo({ eq, partidos = [], precioA, refresh }) {
+function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   const [open, setOpen]   = useState(false);
   const [monto, setMonto] = useState('');
 
   const norm = partidos.filter(p => !p.es_playoff && p.jugado);
 
-  // Partidos jugados de este equipo con pago pendiente, ordenados por fecha
+  // Partidos jugados de este equipo con pago pendiente
   const pendientes = norm.filter(p =>
     (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
     (p.equipo_b === eq.nombre && !p.pago_arb_b)
   ).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
-  const jugPend       = pendientes.length;
-  const deudaBruta    = jugPend * precioA;       // lo que deben por partidos jugados
-  const saldo         = eq.arb_saldo || 0;       // saldo a favor de ESTE equipo solamente
-  const pendienteNeto = Math.max(0, deudaBruta - saldo); // lo que falta cobrar real
-  const saldoLibre    = Math.max(0, saldo - deudaBruta); // saldo que cubre futuros partidos
+  const jugPend    = pendientes.length;
+  const deudaBruta = jugPend * precioA;         // lo que deben por partidos jugados
+  const saldo      = eq.arb_saldo || 0;         // saldo a favor de ESTE equipo
+  // Lo que falta cobrar real = deuda de partidos jugados menos saldo disponible
+  const pendienteNeto = Math.max(0, deudaBruta - saldo);
+  // Saldo sobrante después de cubrir deuda de jugados (ya cubiertos pero guardados)
+  const saldoLibre = Math.max(0, saldo - deudaBruta);
 
   const confirmar_ = async () => {
     const m = parseInt(monto);
     if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
 
-    // Nuevo saldo = saldo existente + monto recibido ahora
+    // El nuevo saldo = saldo actual + monto recibido ahora
     let resto = saldo + m;
 
-    // Aplicar a partidos jugados pendientes en orden cronológico
+    // Aplicar el saldo a los partidos jugados pendientes en orden cronológico
     for (const p of pendientes) {
       if (resto < precioA) break;
       const campo = p.equipo_a === eq.nombre ? 'pago_arb_a' : 'pago_arb_b';
@@ -909,7 +926,7 @@ function PagoEquipo({ eq, partidos = [], precioA, refresh }) {
       resto -= precioA;
     }
 
-    // Guardar lo que sobra como saldo a favor para futuros partidos de este equipo
+    // Guardar lo que sobra como saldo a favor para futuros partidos
     await actualizarEquipo(eq.id, { arb_saldo: resto });
     toast(`✓ $${m.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
     setOpen(false);
@@ -917,27 +934,34 @@ function PagoEquipo({ eq, partidos = [], precioA, refresh }) {
     refresh();
   };
 
-  const alCorriente     = jugPend === 0 && saldo === 0;
+  const alCorriente = jugPend === 0 && saldo === 0;
   const cubiertoPorSaldo = jugPend > 0 && pendienteNeto === 0;
 
   return (
     <div className="arb-equipo-row">
       <div className="arb-equipo-nom">{eq.nombre}</div>
       <div className="arb-equipo-detalle">
+        {/* Deuda de partidos jugados */}
         {jugPend > 0 && (
           <span className="muted" style={{ fontSize: '.8rem' }}>
             ⚠ {jugPend} partido{jugPend !== 1 ? 's' : ''} jugado{jugPend !== 1 ? 's' : ''} sin pagar
             {' '}(${deudaBruta.toLocaleString('es-MX')})
           </span>
         )}
+        {/* Saldo a favor (adelantado) de este equipo */}
         {saldo > 0 && (
           <span style={{ color: '#10b981', fontSize: '.8rem' }}>
             ↑ Adelantado: ${saldo.toLocaleString('es-MX')}
             {saldoLibre > 0 && ` · $${saldoLibre.toLocaleString('es-MX')} para futuros`}
           </span>
         )}
-        {alCorriente      && <span className="badge win">✓ Al corriente</span>}
-        {cubiertoPorSaldo && <span className="badge win">✓ Cubierto por saldo</span>}
+        {/* Estado final */}
+        {alCorriente && (
+          <span className="badge win">✓ Al corriente</span>
+        )}
+        {cubiertoPorSaldo && (
+          <span className="badge win">✓ Cubierto por saldo</span>
+        )}
         {!alCorriente && !cubiertoPorSaldo && (
           <strong style={{ fontSize: '.88rem' }}>
             Pendiente neto: ${pendienteNeto.toLocaleString('es-MX')}
@@ -971,6 +995,127 @@ function PagoEquipo({ eq, partidos = [], precioA, refresh }) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  TAB: COMENTARIOS (vista del organizador)
+// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+//  TAB: COMENTARIOS (vista del organizador)
+// ════════════════════════════════════════════════════════════
+export function TabComentarios({ liga }) {
+  const [comentarios, setComentarios] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const permitido = liga.config?.permitirComentarios !== false;
+
+  const cargar = async () => {
+    setLoading(true);
+    const data = await getComentarios(liga.id);
+    setComentarios(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { cargar(); }, [liga.id]);
+
+  const eliminar = async id => {
+    if (!window.confirm('¿Eliminar este comentario?')) return;
+    try {
+      await eliminarComentario(id);
+      setComentarios(prev => prev.filter(c => c.id !== id));
+      toast('Comentario eliminado');
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
+  const quejas      = comentarios.filter(c => c.tipo === 'queja');
+  const sugerencias = comentarios.filter(c => c.tipo === 'sugerencia');
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '.8rem' }}>
+        <h2 style={{ margin: 0 }}>💬 <span>Comentarios</span></h2>
+        <button className="btn secondary small" onClick={cargar} style={{ marginLeft: 'auto' }}>
+          🔄 Actualizar
+        </button>
+      </div>
+
+      {!permitido && (
+        <div className="auth-error" style={{ marginBottom: '1rem' }}>
+          Los comentarios están deshabilitados para esta liga. Puedes activarlos desde ⚙ Config.
+        </div>
+      )}
+
+      <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1.2rem' }}>
+        Quejas y sugerencias enviadas desde la vista pública.
+        {permitido ? ' Elimina los que ya revisaste para liberar espacio.' : ''}
+      </p>
+
+      {loading && <div className="loading-spinner" style={{ margin: '2rem auto' }} />}
+
+      {!loading && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+
+          {/* Columna Quejas */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.6rem' }}>
+              <span className="badge danger" style={{ fontSize: '.78rem' }}>🔴 Quejas</span>
+              <span className="muted" style={{ fontSize: '.78rem' }}>{quejas.length}</span>
+            </div>
+            {!quejas.length
+              ? <p className="empty" style={{ fontSize: '.85rem' }}>Sin quejas.</p>
+              : quejas.map(c => (
+                <div key={c.id} className="card" style={{ marginBottom: '.6rem', padding: '.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.4rem', marginBottom: '.4rem' }}>
+                    <div>
+                      <strong style={{ fontSize: '.85rem', display: 'block' }}>{c.autor}</strong>
+                      <span className="fixture-date">{formatFecha(c.created_at?.slice(0, 10))}</span>
+                    </div>
+                    <button className="btn danger small" onClick={() => eliminar(c.id)} style={{ flexShrink: 0 }}>🗑</button>
+                  </div>
+                  {c.equipo && (
+                    <p style={{ fontSize: '.78rem', color: 'var(--accent)', marginBottom: '.3rem' }}>
+                      Equipo: {c.equipo}
+                    </p>
+                  )}
+                  {c.descripcion && (
+                    <p style={{ fontSize: '.83rem', margin: '0 0 .25rem', color: 'var(--muted)' }}>
+                      <strong>Descripción:</strong> {c.descripcion}
+                    </p>
+                  )}
+                  {c.mensaje && (
+                    <p style={{ fontSize: '.83rem', margin: 0, lineHeight: 1.5 }}>{c.mensaje}</p>
+                  )}
+                </div>
+              ))
+            }
+          </div>
+
+          {/* Columna Sugerencias */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.6rem' }}>
+              <span className="badge win" style={{ fontSize: '.78rem' }}>💡 Sugerencias</span>
+              <span className="muted" style={{ fontSize: '.78rem' }}>{sugerencias.length}</span>
+            </div>
+            {!sugerencias.length
+              ? <p className="empty" style={{ fontSize: '.85rem' }}>Sin sugerencias.</p>
+              : sugerencias.map(c => (
+                <div key={c.id} className="card" style={{ marginBottom: '.6rem', padding: '.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.4rem', marginBottom: '.4rem' }}>
+                    <div>
+                      <strong style={{ fontSize: '.85rem', display: 'block' }}>{c.autor}</strong>
+                      <span className="fixture-date">{formatFecha(c.created_at?.slice(0, 10))}</span>
+                    </div>
+                    <button className="btn danger small" onClick={() => eliminar(c.id)} style={{ flexShrink: 0 }}>🗑</button>
+                  </div>
+                  <p style={{ fontSize: '.83rem', margin: 0, lineHeight: 1.5 }}>{c.mensaje}</p>
+                </div>
+              ))
+            }
+          </div>
+
+        </div>
+      )}
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
 //  TAB: CONFIG
 // ════════════════════════════════════════════════════════════
 export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva }) {
@@ -980,15 +1125,15 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
     ptsVictoria: 2, ptsBono: 1, ptsDerota: 0,
     precioInscripcion: 500, precioArbitraje: 120,
     permitirAdelantoArb: true,
+    permitirComentarios: true,
     ...(liga.config || {}),
   };
 
-  const [cfg, setCfg]           = useState(cfg0);
-  const [alias, setAlias]       = useState(liga.alias || '');
+  const [cfg, setCfg]         = useState(cfg0);
+  const [alias, setAlias]     = useState(liga.alias || '');
   const [aliasMsg, setAliasMsg] = useState({ ok: '', err: '' });
   const [miembros, setMiembros] = useState([]);
   const [invEmail, setInvEmail] = useState('');
-
   useEffect(() => {
     getMiembros(liga.id).then(setMiembros);
   }, [liga.id]);
@@ -1052,6 +1197,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   const quitar = async (miembro) => {
     if (!window.confirm('¿Quitar este co-admin?')) return;
     await quitarMiembro(liga.id, miembro.user_id);
+    const m = await getMisLigas(liga.id).catch(() => null);
     setMiembros(prev => prev.filter(x => x.id !== miembro.id));
     toast('Co-admin eliminado');
   };
@@ -1101,6 +1247,14 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
             <span>
               <strong>Permitir adelanto de arbitrajes</strong>
               <small>Muestra el panel de pago por equipo en Finanzas.</small>
+            </span>
+          </label>
+          <label className="check-row cfg-toggle-row">
+            <input type="checkbox" checked={cfg.permitirComentarios !== false}
+              onChange={e => setCfg(c => ({ ...c, permitirComentarios: e.target.checked }))} />
+            <span>
+              <strong>Habilitar quejas y sugerencias</strong>
+              <small>Permite a los espectadores enviar comentarios desde la vista pública.</small>
             </span>
           </label>
           <div className="flex mt1"><button type="submit" className="btn">💾 Guardar</button></div>
@@ -1205,7 +1359,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
         </div>
       </div>
 
-      {/* Notificaciones push */}
+      {/* Push */}
       <div className="card">
         <p className="card-subtitle">🔔 Notificaciones</p>
         <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.8rem' }}>
@@ -1297,6 +1451,7 @@ function leerSets(sets, reglas) {
   const setsParaGanar = Math.ceil(reglas.length / 2);
 
   for (let i = 0; i < reglas.length; i++) {
+    // Si ya hay ganador, no pedir más sets
     if (sA >= setsParaGanar || sB >= setsParaGanar) break;
 
     const pA = parseInt(sets[i]?.a);
