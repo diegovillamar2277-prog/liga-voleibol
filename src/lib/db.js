@@ -243,8 +243,8 @@ export async function getPlayoffs(ligaId) {
   return data?.data || null;
 }
 
-export async function guardarPlayoffs(ligaId, data) {
-  if (data === null) {
+export async function guardarPlayoffs(ligaId, data) {  if (data === null) {
+    // Eliminar el registro en lugar de upsert con null
     await sb.from('playoffs').delete().eq('league_id', ligaId);
     return;
   }
@@ -308,7 +308,7 @@ export async function responderPeticion(id, estado) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MÉTRICAS — panel admin
+//  MÉTRICAS — panel admin (Fase 2)
 // ════════════════════════════════════════════════════════════
 
 export async function getMetricas() {
@@ -344,7 +344,13 @@ export async function getMetricas() {
   };
 }
 
-export async function adminGetMetrics() { return getMetricas(); }
+// ════════════════════════════════════════════════════════════
+//  ADMIN API — aliases requeridos por Requirement 2.3
+// ════════════════════════════════════════════════════════════
+
+export async function adminGetMetrics() {
+  return getMetricas();
+}
 
 export async function adminGetLigas() {
   const { data, error } = await sb
@@ -396,4 +402,23 @@ export async function adminAprobarPeticion(id) {
 export async function adminRechazarPeticion(id) {
   const { error } = await sb.from('join_requests').update({ estado: 'rechazada' }).eq('id', id);
   if (error) throw new Error('Error al rechazar petición: ' + error.message);
+}
+
+// ════════════════════════════════════════════════════════════
+//  COMENTARIOS / SUGERENCIAS
+// ════════════════════════════════════════════════════════════
+
+export async function getComentarios(ligaId) {
+  const { data, error } = await sb
+    .from('comentarios')
+    .select('*')
+    .eq('league_id', ligaId)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data;
+}
+
+export async function eliminarComentario(id) {
+  const { error } = await sb.from('comentarios').delete().eq('id', id);
+  if (error) throw new Error('Error al eliminar comentario');
 }
