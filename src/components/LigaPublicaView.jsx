@@ -1,19 +1,16 @@
 // ============================================================
 //  LigaPublicaView.jsx — Vista pública de liga (React)
 // ============================================================
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatFecha } from '../lib/ui.js';
+import { sb } from '../lib/supabase.js';
 import PlayoffsPublico from './PlayoffsPublico.jsx';
 
 function TabNav({ tabs, activeTab, onTabChange }) {
   return (
     <nav className="tab-nav">
       {tabs.map(tab => (
-        <button
-          key={tab.id}
-          className={activeTab === tab.id ? 'active' : ''}
-          onClick={() => onTabChange(tab.id)}
-        >
+        <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => onTabChange(tab.id)}>
           {tab.label}
         </button>
       ))}
@@ -49,9 +46,7 @@ function TablaPublica({ equipos = [], partidos = [], cfg = {} }) {
               <tr key={r.equipo} className={i < 3 ? 'top-row' : ''}>
                 <td>{medal || i + 1}</td>
                 <td><span className="team-name">{r.equipo}</span></td>
-                <td>{r.pj}</td>
-                <td className="green">{r.pg}</td>
-                <td className="red">{r.pp}</td>
+                <td>{r.pj}</td><td className="green">{r.pg}</td><td className="red">{r.pp}</td>
                 {usarSets  && <><td>{r.sg}</td><td>{r.sp}</td></>}
                 {mostrarDS && <td className={ds>0?'green':ds<0?'red':''}>{ds>0?'+':''}{ds}</td>}
                 {usarPts   && <td className="pts-cell">{r.pts}</td>}
@@ -82,9 +77,7 @@ function Resultados({ partidos = [], cfg = {} }) {
             <span className="badge done">V{p.vuelta}</span>
             <div className="fixture-teams">
               <span className={p.ganador === 'A' ? 'team-win' : ''}>{p.equipo_a}</span>
-              <span className="fixture-vs">
-                {usarSets ? `${p.sets_a}:${p.sets_b}` : p.ganador === 'A' ? 'G' : 'P'}
-              </span>
+              <span className="fixture-vs">{usarSets ? `${p.sets_a}:${p.sets_b}` : p.ganador === 'A' ? 'G' : 'P'}</span>
               <span className={p.ganador === 'B' ? 'team-win' : ''}>{p.equipo_b}</span>
             </div>
             <span className="badge win">🏆 {ganN}</span>
@@ -96,82 +89,241 @@ function Resultados({ partidos = [], cfg = {} }) {
   );
 }
 
-// ── Fixture ──────────────────────────────────────────────────
-function FixturePublico({ equipos = [], partidos = [], cfg = {} }) {
-  const vueltas = cfg.vueltas || 2;
-  const noms    = equipos.map(e => e.nombre);
-  const fixture = generarFixture(noms);
+// ── Programación (en mantenimiento) ─────────────────────────
+function Programacion() {
+  return (
+    <div className="empty-state" style={{ padding: '3rem 1rem' }}>
+      <div className="empty-icon">🔧</div>
+      <h2>Programación</h2>
+      <p className="muted" style={{ marginTop: '.5rem' }}>
+        Esta sección está en mantenimiento.<br />
+        Pronto podrás ver los próximos partidos aquí.
+      </p>
+      <span className="badge pending" style={{ marginTop: '1rem', fontSize: '.82rem', padding: '.35rem .8rem' }}>
+        En mantenimiento
+      </span>
+    </div>
+  );
+}
 
-  if (!noms.length) return <p className="empty">No hay equipos.</p>;
+// ── Quejas y Sugerencias ─────────────────────────────────────
+const MAX_PALABRAS_SUGERENCIA = 200;
+
+function contarPalabras(texto) {
+  return texto.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function FormQueja({ ligaId, onEnviado }) {
+  const [autor,       setAutor]       = useState('');
+  const [equipo,      setEquipo]      = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [mensaje,     setMensaje]     = useState('');
+  const [enviando,    setEnviando]    = useState(false);
+  const [error,       setError]       = useState('');
+
+  const enviar = async e => {
+    e.preventDefault();
+    if (!descripcion.trim()) { setError('La descripción es obligatoria.'); return; }
+    if (!mensaje.trim())     { setError('El detalle es obligatorio.'); return; }
+    setError(''); setEnviando(true);
+    try {
+      const { error: err } = await sb.from('comentarios').insert({
+        league_id:   ligaId,
+        tipo:        'queja',
+        autor:       autor.trim() || 'Anónimo',
+        equipo:      equipo.trim() || null,
+        descripcion: descripcion.trim(),
+        mensaje:     mensaje.trim(),
+      });
+      if (err) throw err;
+      setAutor(''); setEquipo(''); setDescripcion(''); setMensaje('');
+      onEnviado();
+    } catch { setError('No se pudo enviar. Intenta de nuevo.'); }
+    finally { setEnviando(false); }
+  };
+
+  return (
+    <form onSubmit={enviar}>
+      <div className="form-row" style={{ marginBottom: '.8rem' }}>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>Tu nombre (opcional)</label>
+          <input type="text" maxLength={40} placeholder="Anónimo" value={autor} onChange={e => setAutor(e.target.value)} />
+        </div>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>Equipo involucrado (opcional)</label>
+          <input type="text" maxLength={60} placeholder="Nombre del equipo" value={equipo} onChange={e => setEquipo(e.target.value)} />
+        </div>
+      </div>
+      <div className="form-group" style={{ marginBottom: '.8rem' }}>
+        <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>¿Qué pasó? *</label>
+        <input type="text" maxLength={120} required placeholder="Resumen breve de la queja"
+          value={descripcion} onChange={e => setDescripcion(e.target.value)} />
+      </div>
+      <div className="form-group" style={{ marginBottom: '.8rem' }}>
+        <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>Detalle *</label>
+        <textarea rows={3} maxLength={1000} required placeholder="Explica con detalle qué sucedió, cuándo y dónde…"
+          value={mensaje} onChange={e => setMensaje(e.target.value)}
+          style={{ width: '100%', padding: '.5rem .75rem', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', resize: 'vertical', fontFamily: 'inherit', fontSize: 'inherit' }} />
+      </div>
+      {error && <div className="auth-error" style={{ marginBottom: '.6rem' }}>{error}</div>}
+      <button type="submit" className="btn" disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar queja'}</button>
+    </form>
+  );
+}
+
+function FormSugerencia({ ligaId, onEnviado }) {
+  const [autor,    setAutor]    = useState('');
+  const [mensaje,  setMensaje]  = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [error,    setError]    = useState('');
+
+  const palabras   = contarPalabras(mensaje);
+  const excedePalabras = palabras > MAX_PALABRAS_SUGERENCIA;
+
+  const enviar = async e => {
+    e.preventDefault();
+    if (!mensaje.trim())  { setError('Escribe tu sugerencia.'); return; }
+    if (excedePalabras)   { setError(`Máximo ${MAX_PALABRAS_SUGERENCIA} palabras (tienes ${palabras}).`); return; }
+    setError(''); setEnviando(true);
+    try {
+      const { error: err } = await sb.from('comentarios').insert({
+        league_id: ligaId,
+        tipo:      'sugerencia',
+        autor:     autor.trim() || 'Anónimo',
+        mensaje:   mensaje.trim(),
+      });
+      if (err) throw err;
+      setAutor(''); setMensaje('');
+      onEnviado();
+    } catch { setError('No se pudo enviar. Intenta de nuevo.'); }
+    finally { setEnviando(false); }
+  };
+
+  return (
+    <form onSubmit={enviar}>
+      <div className="form-group" style={{ marginBottom: '.8rem' }}>
+        <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>Tu nombre (opcional)</label>
+        <input type="text" maxLength={40} placeholder="Anónimo" value={autor} onChange={e => setAutor(e.target.value)} />
+      </div>
+      <div className="form-group" style={{ marginBottom: '.8rem' }}>
+        <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600 }}>
+          Tu sugerencia * &nbsp;
+          <span className={excedePalabras ? 'red' : 'muted'} style={{ fontWeight: 400 }}>
+            {palabras}/{MAX_PALABRAS_SUGERENCIA} palabras
+          </span>
+        </label>
+        <textarea rows={4} required placeholder="Escribe aquí tu sugerencia para mejorar la liga…"
+          value={mensaje} onChange={e => setMensaje(e.target.value)}
+          style={{ width: '100%', padding: '.5rem .75rem', borderRadius: 9, border: `1px solid ${excedePalabras ? 'var(--red)' : 'var(--border)'}`, background: 'var(--bg)', color: 'var(--text)', resize: 'vertical', fontFamily: 'inherit', fontSize: 'inherit' }} />
+      </div>
+      {error && <div className="auth-error" style={{ marginBottom: '.6rem' }}>{error}</div>}
+      <button type="submit" className="btn" disabled={enviando || excedePalabras}>
+        {enviando ? 'Enviando…' : 'Enviar sugerencia'}
+      </button>
+    </form>
+  );
+}
+
+function Comentarios({ ligaId }) {
+  const [tab,     setTab]     = useState('queja');
+  const [enviado, setEnviado] = useState(false);
+
+  const handleEnviado = () => {
+    setEnviado(true);
+    setTimeout(() => setEnviado(false), 3500);
+  };
 
   return (
     <>
-      {Array.from({ length: vueltas }, (_, idx) => {
-        const v = idx + 1;
-        return (
-          <div key={v}>
-            <h3 style={{ margin: '1.2rem 0 .6rem' }}>Vuelta {v}</h3>
-            <div className="fixture-list">
-              {fixture.map((enc, i) => {
-                const eA = v === 1 ? enc.local : enc.visitante;
-                const eB = v === 1 ? enc.visitante : enc.local;
-                const p  = partidos.find(x =>
-                  !x.es_playoff && x.vuelta === v &&
-                  ((x.equipo_a === eA && x.equipo_b === eB) ||
-                   (x.equipo_a === eB && x.equipo_b === eA))
-                );
-                return (
-                  <div key={i} className={`fixture-item ${p?.jugado ? 'jugado' : ''}`}>
-                    <span className={`badge ${v === 1 ? 'pending' : 'done'}`}>V{v}</span>
-                    <div className="fixture-teams">
-                      <span>{eA}</span>
-                      <span className="fixture-vs">
-                        {p?.jugado ? `${p.sets_a}:${p.sets_b}` : 'vs'}
-                      </span>
-                      <span>{eB}</span>
-                    </div>
-                    {p?.fecha && <span className="fixture-date">{formatFecha(p.fecha)}</span>}
-                    {p?.jugado && (
-                      <span className="badge win">
-                        🏆 {p.ganador === 'A' ? p.equipo_a : p.equipo_b}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      {enviado && (
+        <div className="auth-success" style={{ marginBottom: '1rem' }}>
+          ✓ ¡Enviado! El organizador lo recibirá pronto.
+        </div>
+      )}
+
+      {/* Selector queja / sugerencia */}
+      <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1rem', background: 'var(--bg)', borderRadius: 10, padding: '.3rem', border: '1px solid var(--border)' }}>
+        <button
+          className={`auth-tab ${tab === 'queja' ? 'active' : ''}`}
+          style={{ flex: 1, padding: '.45rem', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer', background: tab === 'queja' ? 'var(--red)' : 'transparent', color: tab === 'queja' ? '#fff' : 'var(--muted)', transition: 'all .15s' }}
+          onClick={() => setTab('queja')}
+        >
+          🔴 Queja
+        </button>
+        <button
+          className={`auth-tab ${tab === 'sugerencia' ? 'active' : ''}`}
+          style={{ flex: 1, padding: '.45rem', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer', background: tab === 'sugerencia' ? 'var(--accent)' : 'transparent', color: tab === 'sugerencia' ? '#0f172a' : 'var(--muted)', transition: 'all .15s' }}
+          onClick={() => setTab('sugerencia')}
+        >
+          💡 Sugerencia
+        </button>
+      </div>
+
+      {tab === 'queja' && (
+        <div className="card">
+          <p className="card-subtitle">🔴 Enviar queja</p>
+          <p className="muted" style={{ fontSize: '.82rem', marginBottom: '1rem' }}>
+            Reporta un problema específico. Incluye el mayor detalle posible.
+          </p>
+          <FormQueja ligaId={ligaId} onEnviado={handleEnviado} />
+        </div>
+      )}
+
+      {tab === 'sugerencia' && (
+        <div className="card">
+          <p className="card-subtitle">💡 Enviar sugerencia</p>
+          <p className="muted" style={{ fontSize: '.82rem', marginBottom: '1rem' }}>
+            Comparte una idea para mejorar la liga. Máximo {MAX_PALABRAS_SUGERENCIA} palabras.
+          </p>
+          <FormSugerencia ligaId={ligaId} onEnviado={handleEnviado} />
+        </div>
+      )}
     </>
   );
 }
 
-// ── Componente principal ─────────────────────────────────────
-const TABS = [
-  { id: 'tabla',    label: 'Tabla'      },
-  { id: 'partidos', label: 'Resultados' },
-  { id: 'fixture',  label: 'Fixture'    },
-  { id: 'playoffs', label: '🏆 Playoffs' },
-];
+// ── Lógica de tabs: Playoffs primero si hay bracket ──────────
+function buildTabs(bracket, permitirComentarios) {
+  const hayPlayoffs = bracket && Object.keys(bracket).length > 0;
+  const base = [
+    { id: 'tabla',        label: 'Tabla'        },
+    { id: 'programacion', label: 'Programación' },
+    { id: 'resultados',   label: 'Resultados'   },
+  ];
+  if (permitirComentarios) {
+    base.push({ id: 'comentarios', label: '💬 Comentarios' });
+  }
+  const tabPlayoffs = { id: 'playoffs', label: '🏆 Playoffs' };
+  return hayPlayoffs ? [tabPlayoffs, ...base] : [...base, tabPlayoffs];
+}
 
+// ── Componente principal ─────────────────────────────────────
 export default function LigaPublicaView({ liga, equipos = [], partidos = [], bracket = null, opts = {} }) {
+  const cfg               = liga.config || {};
+  const permitirComentarios = cfg.permitirComentarios !== false;
+  const tabs              = buildTabs(bracket, permitirComentarios);
   const [activeTab, setActiveTab] = useState('tabla');
-  const cfg           = liga.config || {};
-  const identificador = liga.alias || liga.codigo;
+
+  // Si el tab activo deja de existir (playoffs se elimina, comentarios se desactiva),
+  // volver automáticamente a tabla
+  useEffect(() => {
+    const ids = tabs.map(t => t.id);
+    if (!ids.includes(activeTab)) setActiveTab('tabla');
+  }, [tabs, activeTab]);
+
+  const tieneAlias = liga.alias && liga.alias !== liga.codigo;
 
   return (
     <>
-      <TabNav tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabNav tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div style={{
-        textAlign: 'center', margin: '.5rem 0',
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: '.6rem', flexWrap: 'wrap',
-      }}>
-        <code className="codigo-chip" style={{ fontSize: '.85rem' }}>{identificador}</code>
-        {liga.alias && liga.codigo !== liga.alias && (
-          <span className="muted" style={{ fontSize: '.75rem' }}>· código: {liga.codigo}</span>
+      {/* Identificador limpio: alias en chip, código crudo en gris */}
+      <div style={{ textAlign: 'center', margin: '.5rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
+        <code className="codigo-chip" style={{ fontSize: '.85rem' }}>
+          {tieneAlias ? liga.alias : liga.codigo}
+        </code>
+        {tieneAlias && (
+          <span className="muted" style={{ fontSize: '.75rem' }}>{liga.codigo}</span>
         )}
         {liga.temporada && (
           <span className="muted" style={{ fontSize: '.8rem' }}>· {liga.temporada}</span>
@@ -184,24 +336,17 @@ export default function LigaPublicaView({ liga, equipos = [], partidos = [], bra
       </div>
 
       <section className="section">
-        {activeTab === 'tabla'    && <TablaPublica    equipos={equipos} partidos={partidos} cfg={cfg} />}
-        {activeTab === 'partidos' && <Resultados      partidos={partidos} cfg={cfg} />}
-        {activeTab === 'fixture'  && <FixturePublico  equipos={equipos} partidos={partidos} cfg={cfg} />}
-        {activeTab === 'playoffs' && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
+        {activeTab === 'playoffs'     && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
+        {activeTab === 'tabla'        && <TablaPublica    equipos={equipos} partidos={partidos} cfg={cfg} />}
+        {activeTab === 'programacion' && <Programacion />}
+        {activeTab === 'resultados'   && <Resultados      partidos={partidos} cfg={cfg} />}
+        {activeTab === 'comentarios'  && <Comentarios     ligaId={liga.id} />}
       </section>
     </>
   );
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-function generarFixture(noms) {
-  const enc = [];
-  for (let i = 0; i < noms.length; i++)
-    for (let j = i + 1; j < noms.length; j++)
-      enc.push({ local: noms[i], visitante: noms[j] });
-  return enc;
-}
-
 function calcularTabla(equipos, partidos, cfg) {
   if (!Array.isArray(equipos)) equipos = [];
   if (!Array.isArray(partidos)) partidos = [];

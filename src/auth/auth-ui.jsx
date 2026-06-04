@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { login, register } from './auth.js';
 
-// ── Punto de entrada (llamado desde main.js) ─────────────────
 let _root = null;
 let _container = null;
 
@@ -14,37 +13,33 @@ export function unmountAuthScreen() {
 }
 
 export function renderAuthScreen(container) {
-  if (_root && _container !== container) {
-    _root.unmount(); _root = null;
-  }
-  if (!_root) {
-    _root = createRoot(container);
-    _container = container;
-  }
+  if (_root && _container !== container) { _root.unmount(); _root = null; }
+  if (!_root) { _root = createRoot(container); _container = container; }
   _root.render(<AuthScreen />);
 }
 
-// ════════════════════════════════════════════════════════════
-//  COMPONENTE
-// ════════════════════════════════════════════════════════════
+// Código de invitación — viene de variable de entorno de Vercel.
+// Si no está definida, el registro está deshabilitado completamente.
+const CODIGO_REQUERIDO = import.meta.env.VITE_CODIGO_REGISTRO || '';
+
 function AuthScreen() {
-  const [tab, setTab]         = useState('login');
-  const [email, setEmail]     = useState('');
-  const [pass, setPass]       = useState('');
-  const [nombre, setNombre]   = useState('');
+  const [tab,      setTab]      = useState('login');
+  const [email,    setEmail]    = useState('');
+  const [pass,     setPass]     = useState('');
+  const [nombre,   setNombre]   = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [regPass, setRegPass]   = useState('');
-  const [error, setError]     = useState('');
+  const [regPass,  setRegPass]  = useState('');
+  const [codigo,   setCodigo]   = useState('');
+  const [error,    setError]    = useState('');
   const [regError, setRegError] = useState('');
-  const [regOk, setRegOk]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [regOk,    setRegOk]    = useState('');
+  const [loading,  setLoading]  = useState(false);
 
   const handleLogin = async e => {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       await login(email, pass);
-      // onAuthStateChange en auth.js dispara 'auth-change' → main.js enruta
     } catch (err) {
       setError(err.message);
     } finally {
@@ -55,10 +50,24 @@ function AuthScreen() {
   const handleRegister = async e => {
     e.preventDefault();
     setRegError(''); setRegOk(''); setLoading(true);
+
+    // Verificar código de invitación (comparación en cliente es suficiente
+    // para este caso de uso — es una barrera de acceso temporal, no seguridad crítica)
+    if (!CODIGO_REQUERIDO) {
+      setRegError('El registro está deshabilitado temporalmente. Contacta al administrador.');
+      setLoading(false);
+      return;
+    }
+    if (codigo.trim() !== CODIGO_REQUERIDO) {
+      setRegError('Código de invitación incorrecto.');
+      setLoading(false);
+      return;
+    }
+
     try {
       await register(regEmail, regPass, nombre);
       setRegOk('¡Cuenta creada! Ya puedes iniciar sesión.');
-      setNombre(''); setRegEmail(''); setRegPass('');
+      setNombre(''); setRegEmail(''); setRegPass(''); setCodigo('');
     } catch (err) {
       setRegError(err.message);
     } finally {
@@ -66,14 +75,9 @@ function AuthScreen() {
     }
   };
 
-  const irACodigo = e => {
-    e.preventDefault();
-    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'codigo' } }));
-  };
-
   const irAInicio = e => {
     e.preventDefault();
-    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'home' } }));
+    document.dispatchEvent(new CustomEvent('nav', { detail: { page: 'codigo' } }));
   };
 
   return (
@@ -92,6 +96,7 @@ function AuthScreen() {
           </button>
         </div>
 
+        {/* ── Login ── */}
         {tab === 'login' && (
           <form className="auth-form" onSubmit={handleLogin}>
             <div className="auth-field">
@@ -111,6 +116,7 @@ function AuthScreen() {
           </form>
         )}
 
+        {/* ── Registro ── */}
         {tab === 'register' && (
           <form className="auth-form" onSubmit={handleRegister}>
             <div className="auth-field">
@@ -128,6 +134,15 @@ function AuthScreen() {
               <input type="password" placeholder="••••••••" required minLength={6} autoComplete="new-password"
                 value={regPass} onChange={e => setRegPass(e.target.value)} />
             </div>
+            <div className="auth-field">
+              <label>Código de invitación</label>
+              <input type="text" placeholder="Pídelo al administrador" required
+                value={codigo} onChange={e => setCodigo(e.target.value)}
+                autoComplete="off" />
+              <small className="muted" style={{ fontSize: '.75rem', marginTop: '.2rem', display: 'block' }}>
+                Necesitas un código para crear una cuenta.
+              </small>
+            </div>
             {regError && <div className="auth-error">{regError}</div>}
             {regOk    && <div className="auth-success">{regOk}</div>}
             <button type="submit" className="auth-btn btn" disabled={loading}>
@@ -136,15 +151,9 @@ function AuthScreen() {
           </form>
         )}
 
-        <div className="auth-footer-links">
-          <p className="auth-footer">
-            ¿Solo quieres ver tu liga?{' '}
-            <a href="#" onClick={irACodigo}>Ingresa con código →</a>
-          </p>
-          <p className="auth-footer" style={{ marginTop: '.4rem' }}>
-            <a href="#" onClick={irAInicio}>← Volver al inicio</a>
-          </p>
-        </div>
+        <p className="auth-footer" style={{ marginTop: '1.2rem' }}>
+          <a href="#" onClick={irAInicio}>← Ver liga sin iniciar sesión</a>
+        </p>
       </div>
     </div>
   );

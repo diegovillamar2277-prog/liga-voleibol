@@ -2,23 +2,25 @@ import '../styles.css';
 import { createRoot } from 'react-dom/client';
 import { ToastContainer } from './components/Toast.jsx';
 import { initAuth, isAdmin, isLoggedIn } from './auth/auth.js';
-import { renderAuthScreen, unmountAuthScreen } from './auth/auth-ui.jsx';
-import { renderAdminPanel, unmountAdminPanel } from './admin/admin.jsx';
-import { renderOrgPanel, unmountOrgPanel }     from './liga/liga-dashboard.jsx';
-import { renderPublicView }                    from './liga/public-view.jsx';
-import { showLoading, hideLoading }            from './lib/ui.js';
+import { renderAuthScreen, unmountAuthScreen }  from './auth/auth-ui.jsx';
+import { renderAdminPanel, unmountAdminPanel }  from './admin/admin.jsx';
+import { renderOrgPanel,   unmountOrgPanel }    from './liga/liga-dashboard.jsx';
+import { renderPublicView, unmountPublicView }  from './liga/public-view.jsx';
+import { showLoading, hideLoading }             from './lib/ui.js';
 
 const app = document.getElementById('app');
 
-// Montar ToastContainer una vez en un nodo separado
 const toastEl = document.createElement('div');
 document.body.appendChild(toastEl);
 createRoot(toastEl).render(<ToastContainer />);
 
+// Desmontar todos los roots antes de montar uno nuevo.
+// unmountPublicView era la pieza faltante — causaba el bug del botón salir.
 function cleanup() {
   unmountAuthScreen();
   unmountAdminPanel();
   unmountOrgPanel();
+  unmountPublicView();
 }
 
 async function boot() {
@@ -59,26 +61,13 @@ async function route() {
   const params    = new URLSearchParams(location.search);
   const codigoURL = params.get('liga') || '';
 
-  if (codigoURL) {
-    cleanup();
-    renderPublicView(app, codigoURL);
-    return;
-  }
+  if (codigoURL) { cleanup(); renderPublicView(app, codigoURL); return; }
 
   if (isLoggedIn()) {
     const mod = await import('./auth/auth.js');
-    if (!mod.currentProfile) {
-      cleanup();
-      renderPublicView(app, '');
-      return;
-    }
-    if (isAdmin()) {
-      cleanup();
-      renderAdminPanel(app, mod.currentProfile);
-    } else {
-      cleanup();
-      renderOrgPanel(app, mod.currentProfile);
-    }
+    if (!mod.currentProfile) { cleanup(); renderPublicView(app, ''); return; }
+    if (isAdmin()) { cleanup(); renderAdminPanel(app, mod.currentProfile); }
+    else           { cleanup(); renderOrgPanel(app, mod.currentProfile); }
     return;
   }
 
@@ -87,15 +76,8 @@ async function route() {
 }
 
 document.addEventListener('auth-change', ({ detail }) => {
-  if (detail.event === 'SIGNED_IN') {
-    window.history.replaceState({}, '', '/');
-    route();
-  }
-  if (detail.event === 'SIGNED_OUT') {
-    localStorage.removeItem('ligaActualId');
-    cleanup();
-    renderPublicView(app, '');
-  }
+  if (detail.event === 'SIGNED_IN')  { window.history.replaceState({}, '', '/'); route(); }
+  if (detail.event === 'SIGNED_OUT') { localStorage.removeItem('ligaActualId'); cleanup(); renderPublicView(app, ''); }
 });
 
 document.addEventListener('nav', ({ detail }) => {

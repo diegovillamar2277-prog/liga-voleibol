@@ -29,7 +29,15 @@ async function loadProfile(uid) {
     .select('*')
     .eq('id', uid)
     .single();
-  if (!error) currentProfile = data;
+  if (!error) {
+    // Si el usuario fue desactivado por el admin, cerramos sesión
+    if (data && data.activo === false) {
+      currentProfile = null;
+      await sb.auth.signOut();
+      return;
+    }
+    currentProfile = data;
+  }
 }
 
 // ── Login ────────────────────────────────────────────────────
