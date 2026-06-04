@@ -12,6 +12,9 @@ import {
   contarLigasDeUsuario, crearLiga, enviarPeticion, eliminarLiga,
 } from '../lib/db.js';
 import { toast, formatFecha } from '../lib/ui.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { PLANES } from '../lib/planes.js';
+import ModalPago from '../components/ModalPago.jsx';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { saveSnapshot } from '../lib/offline.js';
 import { notifyDesdePartidoGuardado } from '../lib/push.js';
@@ -271,6 +274,7 @@ const TABS = [
 ];
 
 function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
+  const { isPro } = useAuth();
   const [activeTab, setActiveTab] = useState('tabla');
   const [liga,      setLiga]      = useState(null);
   const [equipos,   setEquipos]   = useState([]);
@@ -315,21 +319,26 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
   return (
     <>
       <nav className="tab-nav">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={activeTab === t.id ? 'active' : ''}
-            onClick={() => setActiveTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const bloqueado = !isPro && ['playoffs', 'finanzas'].includes(t.id);
+          return (
+            <button
+              key={t.id}
+              className={activeTab === t.id ? 'active' : ''}
+              onClick={() => setActiveTab(bloqueado ? 'upgrade' : t.id)}
+              title={bloqueado ? 'Disponible en Plan Pro' : ''}
+            >
+              {t.label}{bloqueado ? ' 🔒' : ''}
+            </button>
+          );
+        })}
       </nav>
       <section className="section">
         {activeTab === 'tabla'    && <TabTabla    {...tabProps} />}
         {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
         {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
         {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
+        {activeTab === 'upgrade'      && <TabUpgrade />}
         {activeTab === 'playoffs' && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
         {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
         {activeTab === 'config'   && <TabConfig   {...tabProps} onEliminar={async () => {
@@ -1249,6 +1258,51 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
     </>
   );
 }
+
+// ════════════════════════════════════════════════════════════
+//  TAB: UPGRADE
+// ════════════════════════════════════════════════════════════
+function TabUpgrade() {
+  const [mostrarPago, setMostrarPago] = useState(false);
+
+  return (
+    <>
+      {mostrarPago && (
+        <ModalPago onCerrar={() => setMostrarPago(false)} />
+      )}
+      <div className="empty-state" style={{ maxWidth: 480 }}>
+        <div className="empty-icon">🔒</div>
+        <h2>Función <span>Pro</span></h2>
+        <p className="muted" style={{ marginBottom: '1.5rem' }}>
+          Esta función está disponible en el Plan Pro.
+        </p>
+        <div className="card" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+          <p className="card-subtitle">Plan Pro incluye</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', fontSize: '.9rem' }}>
+            <span>✅ Ligas ilimitadas</span>
+            <span>✅ Equipos ilimitados por liga</span>
+            <span>✅ Bracket de playoffs completo</span>
+            <span>✅ Módulo de finanzas</span>
+            <span>✅ Alias personalizado de liga</span>
+            <span>✅ Co-administradores</span>
+          </div>
+        </div>
+        <button
+          className="btn"
+          style={{ width: '100%', padding: '.8rem', fontSize: '1rem' }}
+          onClick={() => setMostrarPago(true)}
+        >
+          🚀 Obtener Plan Pro
+        </button>
+        <p className="muted" style={{ fontSize: '.78rem', marginTop: '.8rem' }}>
+          Desde $99 MXN/mes · Pago seguro con MercadoPago
+        </p>
+      </div>
+    </>
+  );
+}
+
+
 
 // ════════════════════════════════════════════════════════════
 //  HELPERS PUROS

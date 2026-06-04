@@ -25,6 +25,33 @@ async function boot() {
   showLoading('Iniciando…');
   await initAuth();
   hideLoading();
+
+  // Detectar retorno de MercadoPago
+  const params = new URLSearchParams(location.search);
+  const pago   = params.get('pago');
+  if (pago === 'ok') {
+    window.history.replaceState({}, '', '/');
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('liga:toast', {
+        detail: { msg: '🎉 ¡Pago exitoso! Tu Plan Pro ya está activo.', tipo: 'ok', duracion: 5000, id: Date.now() }
+      }));
+    }, 1000);
+  } else if (pago === 'error') {
+    window.history.replaceState({}, '', '/');
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('liga:toast', {
+        detail: { msg: '❌ El pago no se completó. Intenta de nuevo.', tipo: 'error', duracion: 5000, id: Date.now() }
+      }));
+    }, 1000);
+  } else if (pago === 'pendiente') {
+    window.history.replaceState({}, '', '/');
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('liga:toast', {
+        detail: { msg: '⏳ Pago pendiente. Te avisaremos cuando se confirme.', tipo: 'warn', duracion: 5000, id: Date.now() }
+      }));
+    }, 1000);
+  }
+
   await route();
 }
 

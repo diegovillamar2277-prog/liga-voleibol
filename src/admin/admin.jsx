@@ -9,6 +9,7 @@ import {
   getTodasLigas, actualizarLiga, getPeticiones, responderPeticion,
   getMetricas, getMisLigas, crearLiga,
   getLigaById, getEquipos, getPartidos,
+  actualizarPerfil,
 } from '../lib/db.js';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { TabTabla, TabFixture, TabPartidos, TabEquipos, TabFinanzas, TabConfig } from '../liga/liga-dashboard.jsx';
@@ -246,6 +247,19 @@ function SeccionUsuarios({ profile }) {
     } catch (err) { toast(err.message, 'error'); }
   };
 
+  const togglePlan = async (uid, planActual) => {
+    try {
+      const nuevoPlan = planActual === 'pro' ? 'free' : 'pro';
+      await actualizarPerfil(uid, {
+        plan: nuevoPlan,
+        plan_expira: null,
+        plan_origen: 'manual',
+      });
+      toast(nuevoPlan === 'pro' ? '⭐ Plan Pro activado' : 'Plan revertido a Free');
+      cargar();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
   const handleRol = async (uid, rol) => {
     try {
       await cambiarRol(uid, rol);
@@ -299,6 +313,13 @@ function SeccionUsuarios({ profile }) {
                           onClick={() => toggleUser(u.id, !u.activo)}
                         >
                           {u.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                          className={`btn ${u.plan === 'pro' ? 'secondary' : ''} small`}
+                          style={{ borderColor: 'var(--accent)', color: u.plan === 'pro' ? 'var(--muted)' : 'var(--accent)' }}
+                          onClick={() => togglePlan(u.id, u.plan)}
+                        >
+                          {u.plan === 'pro' ? '⭐ Pro activo' : '🔓 Activar Pro'}
                         </button>
                       </>
                   }

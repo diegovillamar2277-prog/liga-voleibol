@@ -71,6 +71,9 @@ export function isAdmin()      { return ['superadmin','admin'].includes(currentP
 export function isOrganizador(){ return currentProfile?.role === 'organizador'; }
 export function isLoggedIn()   { return !!currentUser; }
 
+// ── Plan ────────────────────────────────────────────────────
+export { isPro, getPlan } from '../lib/planes.js';
+
 // ── Cambiar contraseña ──────────────────────────────────────
 export async function changePassword(newPassword) {
   const { error } = await sb.auth.updateUser({ password: newPassword });

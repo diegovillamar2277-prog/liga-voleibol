@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { sb } from '../lib/supabase.js';
+import { getPlan, PLANES } from '../lib/planes.js';
 
 // ── Error translation (Spanish messages) ────────────────────
 function traducirError(msg) {
@@ -44,7 +45,6 @@ export function AuthProvider({ children }) {
           setCurrentProfile(profile);
         }
       } catch {
-        // getSession() threw — treat as unauthenticated
         setCurrentUser(null);
         setCurrentProfile(null);
       } finally {
@@ -96,6 +96,8 @@ export function AuthProvider({ children }) {
   const isLoggedIn   = !!currentUser;
   const isAdmin      = ['superadmin', 'admin'].includes(currentProfile?.role);
   const isSuperAdmin = currentProfile?.role === 'superadmin';
+  const plan         = getPlan(currentProfile);
+  const isPro        = plan === PLANES.pro;
 
   const value = {
     currentUser,
@@ -103,6 +105,8 @@ export function AuthProvider({ children }) {
     isLoggedIn,
     isAdmin,
     isSuperAdmin,
+    isPro,
+    plan,
     loading,
     login,
     logout,
