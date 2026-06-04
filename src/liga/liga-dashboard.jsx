@@ -789,7 +789,15 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   };
 
   const pagarArb = async (id, campo) => {
+    // Marcar el partido como pagado
     await actualizarPartido(id, { [campo]: true });
+
+    // Si el equipo tenía saldo adelantado, descontarlo para evitar doble conteo.
+    // El saldo adelantado ya "anticipaba" este pago — si ahora se marca manualmente
+    // es porque el dinero entró por otra vía, así que el saldo debe quedar intacto.
+    // PERO si el saldo cubre este partido, significa que YA está pagado con ese saldo,
+    // así que marcar pago_arb manualmente es correcto y no hay que tocar el saldo.
+    // Conclusión: no modificar arb_saldo aquí — el saldo se gestiona solo desde PagoEquipo.
     refresh();
     toast('Arbitraje registrado ✓');
   };
