@@ -1,6 +1,7 @@
 // ============================================================
 //  admin.jsx — Panel de administrador (React)
 // ============================================================
+import { AuthProvider } from '../context/AuthContext.jsx';
 import { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
@@ -32,7 +33,11 @@ export function renderAdminPanel(container, profile) {
     _root = createRoot(container);
     _container = container;
   }
-  _root.render(<AdminPanelApp profile={profile} />);
+  _root.render(
+    <AuthProvider>
+      <AdminPanelApp profile={profile} />
+    </AuthProvider>
+  );
 }
 
 // ════════════════════════════════════════════════════════════
