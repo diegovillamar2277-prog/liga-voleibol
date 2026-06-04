@@ -342,25 +342,15 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
         })}
       </nav>
       <section className="section">
-<<<<<<< HEAD
-        {activeTab === 'tabla'    && <TabTabla    {...tabProps} />}
-        {activeTab === 'fixture'  && <TabFixture  {...tabProps} />}
-        {activeTab === 'partidos' && <TabPartidos {...tabProps} />}
-        {activeTab === 'equipos'  && <TabEquipos  {...tabProps} />}
-        {activeTab === 'upgrade'      && <TabUpgrade />}
-        {activeTab === 'playoffs' && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
-        {activeTab === 'finanzas' && <TabFinanzas {...tabProps} />}
-        {activeTab === 'config'   && <TabConfig   {...tabProps} onEliminar={async () => {
-=======
-        {activeTab === 'tabla'        && <TabTabla    {...tabProps} />}
-        {activeTab === 'fixture'      && <TabFixture  {...tabProps} />}
-        {activeTab === 'partidos'     && <TabPartidos {...tabProps} />}
-        {activeTab === 'equipos'      && <TabEquipos  {...tabProps} />}
-        {activeTab === 'playoffs'     && <TabPlayoffs liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
-        {activeTab === 'finanzas'     && <TabFinanzas {...tabProps} />}
-        {activeTab === 'comentarios'  && <TabComentarios liga={liga} />}
-        {activeTab === 'config'       && <TabConfig   {...tabProps} onEliminar={async () => {
->>>>>>> 788202bc41cb658c8a7e0fd6fa6c099f69046863
+        {activeTab === 'upgrade'     && <TabUpgrade />}
+        {activeTab === 'tabla'       && <TabTabla      {...tabProps} />}
+        {activeTab === 'fixture'     && <TabFixture    {...tabProps} />}
+        {activeTab === 'partidos'    && <TabPartidos   {...tabProps} />}
+        {activeTab === 'equipos'     && <TabEquipos    {...tabProps} />}
+        {activeTab === 'playoffs'    && <TabPlayoffs   liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
+        {activeTab === 'finanzas'    && <TabFinanzas   {...tabProps} />}
+        {activeTab === 'comentarios' && <TabComentarios liga={liga} />}
+        {activeTab === 'config'      && <TabConfig     {...tabProps} onEliminar={async () => {
           if (!window.confirm(`¿Eliminar la liga "${liga.nombre}"? Esta acción no se puede deshacer.`)) return;
           try {
             await eliminarLiga(liga.id);
