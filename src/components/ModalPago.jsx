@@ -9,8 +9,8 @@ export default function ModalPago({ onCerrar }) {
   const [error,    setError]    = useState('');
 
   const precios = {
-    mensual:   { precio: '$99 MXN', label: '1 mes',          desc: 'Renovación manual' },
-    temporada: { precio: '$699 MXN', label: '6 meses',        desc: 'Ahorra $99 MXN' },
+    mensual:   { precio: '$100 MXN', label: '1 mes',          desc: 'Renovación manual' },
+    temporada: { precio: '$750 MXN', label: '6 meses',        desc: 'Ahorra $150 MXN' },
   };
 
   const iniciarPago = async () => {
@@ -31,8 +31,8 @@ export default function ModalPago({ onCerrar }) {
       if (!res.ok) throw new Error(data.error || 'Error al crear pago');
 
       // En sandbox usar sandbox_url, en producción usar init_point
-      const url = data.sandbox_url || data.init_point;
-      window.location.href = url;
+      const { sandbox_url } = await res.json();
+      window.location.href = sandbox_url; // ← sandbox, no init_point
 
     } catch (err) {
       setError(err.message);
