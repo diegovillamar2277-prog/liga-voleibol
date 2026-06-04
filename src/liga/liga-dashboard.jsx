@@ -1,6 +1,7 @@
 // ============================================================
 //  liga-dashboard.jsx — Panel del organizador (React)
 // ============================================================
+import { AuthProvider } from '../context/AuthContext.jsx';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
@@ -34,7 +35,6 @@ export function unmountOrgPanel() {
 }
 
 export function renderOrgPanel(container, profile) {
-  // Si el contenedor cambió (ej. navegación), desmontar el root anterior
   if (_root && _container !== container) {
     _root.unmount();
     _root = null;
@@ -43,7 +43,11 @@ export function renderOrgPanel(container, profile) {
     _root = createRoot(container);
     _container = container;
   }
-  _root.render(<OrgPanelApp profile={profile} />);
+  _root.render(
+    <AuthProvider>
+      <OrgPanelApp profile={profile} />
+    </AuthProvider>
+  );
 }
 
 // ════════════════════════════════════════════════════════════
