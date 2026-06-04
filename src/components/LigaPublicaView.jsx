@@ -304,11 +304,12 @@ export default function LigaPublicaView({ liga, equipos = [], partidos = [], bra
   const tabs              = buildTabs(bracket, permitirComentarios);
   const [activeTab, setActiveTab] = useState('tabla');
 
-  // Si playoffs aparece/desaparece y el tab activo ya no está, volver a tabla
+  // Si el tab activo deja de existir (playoffs se elimina, comentarios se desactiva),
+  // volver automáticamente a tabla
   useEffect(() => {
     const ids = tabs.map(t => t.id);
     if (!ids.includes(activeTab)) setActiveTab('tabla');
-  }, [bracket, permitirComentarios]);
+  }, [tabs, activeTab]);
 
   const tieneAlias = liga.alias && liga.alias !== liga.codigo;
 
