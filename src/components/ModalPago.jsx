@@ -27,12 +27,11 @@ export default function ModalPago({ onCerrar }) {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json(); // ← una sola lectura, guarda todo
       if (!res.ok) throw new Error(data.error || 'Error al crear pago');
 
       // En sandbox usar sandbox_url, en producción usar init_point
-      const { sandbox_url } = await res.json();
-      window.location.href = sandbox_url; // ← sandbox, no init_point
+      window.location.href = data.sandbox_url; // ← usa data ya leído arriba
 
     } catch (err) {
       setError(err.message);
