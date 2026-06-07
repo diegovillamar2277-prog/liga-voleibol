@@ -544,12 +544,40 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
     if (existe) { toast('Ya existe este partido en esa vuelta', 'error'); return; }
 
     try {
+      const precioA = liga.config?.precioArbitraje ?? 120;
+
+      // Determinar si cada equipo puede cubrir su arbitraje con saldo
+      const equipoAData = equipos.find(e => e.nombre === eqA);
+      const equipoBData = equipos.find(e => e.nombre === eqB);
+      const saldoA = equipoAData?.arb_saldo || 0;
+      const saldoB = equipoBData?.arb_saldo || 0;
+      const pagoA = saldoA >= precioA;
+      const pagoB = saldoB >= precioA;
+
+      // Guardar el partido marcando pagos automáticos si hay saldo suficiente
       const guardado = await guardarPartido(liga.id, {
         vuelta, fecha, equipo_a: eqA, equipo_b: eqB,
         sets: setsData, sets_a: sA, sets_b: sB, ganador, jugado: true,
-        pago_arb_a: false, pago_arb_b: false,
+        pago_arb_a: pagoA,
+        pago_arb_b: pagoB,
       });
-      toast(`✓ ${eqA} ${sA}:${sB} ${eqB}`);
+
+      // Descontar saldo a cada equipo que cubrió con saldo
+      if (pagoA && equipoAData) {
+        const nuevoSaldoA = saldoA - precioA;
+        await actualizarEquipo(equipoAData.id, { arb_saldo: nuevoSaldoA });
+      }
+      if (pagoB && equipoBData) {
+        const nuevoSaldoB = saldoB - precioA;
+        await actualizarEquipo(equipoBData.id, { arb_saldo: nuevoSaldoB });
+      }
+
+      const msg = [
+        pagoA ? `${eqA} cubierto con saldo` : null,
+        pagoB ? `${eqB} cubierto con saldo` : null,
+      ].filter(Boolean).join(' · ');
+
+      toast(`✓ ${eqA} ${sA}:${sB} ${eqB}${msg ? ` — ${msg}` : ''}`);
       await notifyDesdePartidoGuardado(liga, guardado);
       setFecha(''); setEqA(''); setEqB(''); setGanSimple('');
       setSets(reglas.map(() => ({ a: '', b: '' })));
@@ -937,15 +965,16 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
     (p.equipo_b === eq.nombre && !p.pago_arb_b)
   ).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
-  const jugPend    = pendientes.length;
-  const deudaBruta = jugPend * precioA;
-  const saldo      = eq.arb_saldo || 0;
+  const jugPend       = pendientes.length;
+  const deudaBruta    = jugPend * precioA;
+  const saldo         = eq.arb_saldo || 0;
   const pendienteNeto = Math.max(0, deudaBruta - saldo);
-  const saldoLibre = Math.max(0, saldo - deudaBruta);
+  const saldoLibre    = Math.max(0, saldo - deudaBruta);
 
+  // Registra un monto nuevo y lo aplica a partidos pendientes
   const confirmar_ = async () => {
     const m = parseInt(monto);
-    if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
+    if (!m || m < 1) { toast('Ingresa un monto valido', 'error'); return; }
 
     let resto = saldo + m;
 
@@ -957,14 +986,43 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
     }
 
     await actualizarEquipo(eq.id, { arb_saldo: resto });
-    toast(`✓ $${m.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
+    const msg = resto > 0 ? ` - Saldo a favor: $${resto.toLocaleString('es-MX')}` : '';
+    toast('Pago de $' + m.toLocaleString('es-MX') + ' registrado' + msg);
     setOpen(false);
     setMonto('');
     refresh();
   };
 
-  const alCorriente     = jugPend === 0 && saldo === 0;
+  // Aplica el saldo EXISTENTE a partidos pendientes sin cobrar monto nuevo.
+  // Util cuando el equipo tenia saldo antes de que se registrara el partido.
+  const aplicarSaldo = async () => {
+    let resto = saldo;
+    let cubiertos = 0;
+
+    for (const p of pendientes) {
+      if (resto < precioA) break;
+      const campo = p.equipo_a === eq.nombre ? 'pago_arb_a' : 'pago_arb_b';
+      await actualizarPartido(p.id, { [campo]: true });
+      resto -= precioA;
+      cubiertos++;
+    }
+
+    await actualizarEquipo(eq.id, { arb_saldo: resto });
+
+    if (cubiertos > 0) {
+      const restMsg = resto > 0 ? ' - $' + resto.toLocaleString('es-MX') + ' restante' : '';
+      const plural  = cubiertos !== 1;
+      toast(cubiertos + ' partido' + (plural ? 's' : '') + ' cubierto' + (plural ? 's' : '') + ' con saldo' + restMsg);
+    } else {
+      toast('Saldo insuficiente para cubrir un arbitraje completo', 'error');
+    }
+    refresh();
+  };
+
+  const alCorriente      = jugPend === 0 && saldo === 0;
   const cubiertoPorSaldo = jugPend > 0 && pendienteNeto === 0;
+  // Solo mostrar "Aplicar saldo" si hay saldo suficiente para al menos 1 partido pendiente
+  const puedeAplicarSaldo = saldo >= precioA && jugPend > 0 && !cubiertoPorSaldo;
 
   return (
     <div style={{
@@ -979,23 +1037,23 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
         {eq.nombre}
       </div>
 
-      {/* Fila principal: estado a la izquierda, botón a la derecha */}
+      {/* Fila principal: estado a la izquierda, botones a la derecha */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.6rem', flexWrap: 'wrap' }}>
 
         {/* Estado / info izquierda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', flex: 1 }}>
-          {/* Deuda — solo si NO está cubierta por saldo */}
+          {/* Deuda — solo si NO esta cubierta por saldo */}
           {jugPend > 0 && !cubiertoPorSaldo && (
             <span style={{ fontSize: '.8rem', color: 'var(--red)' }}>
-              ⚠ {jugPend} partido{jugPend !== 1 ? 's' : ''} sin pagar · ${deudaBruta.toLocaleString('es-MX')}
+              {jugPend} partido{jugPend !== 1 ? 's' : ''} sin pagar &middot; ${deudaBruta.toLocaleString('es-MX')}
             </span>
           )}
 
           {/* Saldo adelantado */}
           {saldo > 0 && (
             <span style={{ color: '#10b981', fontSize: '.8rem' }}>
-              ↑ ${saldo.toLocaleString('es-MX')} adelantado
-              {saldoLibre > 0 && ` · $${saldoLibre.toLocaleString('es-MX')} para futuros`}
+              Saldo: ${saldo.toLocaleString('es-MX')}
+              {saldoLibre > 0 && ' · $' + saldoLibre.toLocaleString('es-MX') + ' para futuros'}
             </span>
           )}
 
@@ -1006,21 +1064,33 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
           {cubiertoPorSaldo && (
             <span className="badge win" style={{ alignSelf: 'flex-start' }}>✓ Cubierto por saldo</span>
           )}
-          {!alCorriente && !cubiertoPorSaldo && (
+          {!alCorriente && !cubiertoPorSaldo && jugPend > 0 && (
             <strong style={{ fontSize: '.88rem', color: 'var(--red)' }}>
               Pendiente: ${pendienteNeto.toLocaleString('es-MX')}
             </strong>
           )}
         </div>
 
-        {/* Botón registrar pago — derecha */}
-        <button
-          className="btn secondary"
-          style={{ fontSize: '.8rem', flexShrink: 0 }}
-          onClick={() => setOpen(o => !o)}
-        >
-          💸 Registrar pago
-        </button>
+        {/* Botones derecha */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', flexShrink: 0 }}>
+          {/* Aplicar saldo: solo aparece cuando hay saldo que puede cubrir partidos */}
+          {puedeAplicarSaldo && (
+            <button
+              className="btn"
+              style={{ fontSize: '.8rem' }}
+              onClick={aplicarSaldo}
+            >
+              Aplicar saldo
+            </button>
+          )}
+          <button
+            className="btn secondary"
+            style={{ fontSize: '.8rem' }}
+            onClick={() => setOpen(o => !o)}
+          >
+            Registrar pago
+          </button>
+        </div>
       </div>
 
       {/* Formulario expandible */}
@@ -1033,10 +1103,10 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
             onChange={e => setMonto(e.target.value)}
             placeholder={String(pendienteNeto > 0 ? pendienteNeto : precioA)}
           />
-          <button className="btn" style={{ fontSize: '.8rem' }} onClick={confirmar_}>✓ Confirmar</button>
+          <button className="btn" style={{ fontSize: '.8rem' }} onClick={confirmar_}>Confirmar</button>
           <button className="btn secondary" style={{ fontSize: '.8rem' }} onClick={() => setOpen(false)}>Cancelar</button>
           <p className="muted" style={{ fontSize: '.74rem', marginTop: '.3rem', width: '100%' }}>
-            El sobrante queda como saldo a favor de <strong>{eq.nombre}</strong> y cubre sus próximos partidos.
+            El sobrante queda como saldo a favor de <strong>{eq.nombre}</strong> y cubre sus proximos partidos.
             No afecta el saldo de otros equipos.
           </p>
         </div>
@@ -1044,6 +1114,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
     </div>
   );
 }
+
 
 // ════════════════════════════════════════════════════════════
 //  TAB: COMENTARIOS (vista del organizador)
