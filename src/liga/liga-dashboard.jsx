@@ -890,7 +890,14 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
         <p className="card-subtitle">Detalle por partido</p>
         {!norm.length
           ? <p className="muted">Sin partidos jugados aún.</p>
-          : norm.sort((a, b) => a.vuelta - b.vuelta).map(p => (
+          : [...norm].sort((a, b) => {
+              // Primero los que tienen al menos un arbitraje pendiente
+              const aPend = (!a.pago_arb_a || !a.pago_arb_b) ? 0 : 1;
+              const bPend = (!b.pago_arb_a || !b.pago_arb_b) ? 0 : 1;
+              if (aPend !== bPend) return aPend - bPend;
+              // Dentro de cada grupo, orden por vuelta
+              return a.vuelta - b.vuelta;
+            }).map(p => (
             <div key={p.id} className="fixture-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '.4rem' }}>
               <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span className={`badge ${p.vuelta === 1 ? 'pending' : 'done'}`}>V{p.vuelta}</span>
@@ -960,46 +967,65 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   const cubiertoPorSaldo = jugPend > 0 && pendienteNeto === 0;
 
   return (
-    <div className="arb-equipo-row">
-      <div className="arb-equipo-nom">{eq.nombre}</div>
-      <div className="arb-equipo-detalle">
-
-        {/* ── FIX BUG 1: Solo mostrar advertencia si NO está cubierta por saldo ── */}
-        {jugPend > 0 && !cubiertoPorSaldo && (
-          <span className="muted" style={{ fontSize: '.8rem' }}>
-            ⚠ {jugPend} partido{jugPend !== 1 ? 's' : ''} jugado{jugPend !== 1 ? 's' : ''} sin pagar
-            {' '}(${deudaBruta.toLocaleString('es-MX')})
-          </span>
-        )}
-
-        {/* Saldo a favor */}
-        {saldo > 0 && (
-          <span style={{ color: '#10b981', fontSize: '.8rem' }}>
-            ↑ Adelantado: ${saldo.toLocaleString('es-MX')}
-            {saldoLibre > 0 && ` · $${saldoLibre.toLocaleString('es-MX')} para futuros`}
-          </span>
-        )}
-
-        {/* Estado final */}
-        {alCorriente && (
-          <span className="badge win">✓ Al corriente</span>
-        )}
-        {cubiertoPorSaldo && (
-          <span className="badge win">✓ Cubierto por saldo</span>
-        )}
-        {!alCorriente && !cubiertoPorSaldo && (
-          <strong style={{ fontSize: '.88rem' }}>
-            Pendiente neto: ${pendienteNeto.toLocaleString('es-MX')}
-          </strong>
-        )}
+    <div style={{
+      background: 'var(--card2)',
+      border: '1px solid var(--border2)',
+      borderRadius: 'var(--radius)',
+      padding: '.9rem 1rem',
+      marginBottom: '.6rem',
+    }}>
+      {/* Nombre del equipo centrado arriba */}
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '1rem', marginBottom: '.6rem' }}>
+        {eq.nombre}
       </div>
-      <div className="arb-equipo-acciones">
-        <button className="btn secondary" style={{ fontSize: '.8rem' }} onClick={() => setOpen(o => !o)}>
+
+      {/* Fila principal: estado a la izquierda, botón a la derecha */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.6rem', flexWrap: 'wrap' }}>
+
+        {/* Estado / info izquierda */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', flex: 1 }}>
+          {/* Deuda — solo si NO está cubierta por saldo */}
+          {jugPend > 0 && !cubiertoPorSaldo && (
+            <span style={{ fontSize: '.8rem', color: 'var(--red)' }}>
+              ⚠ {jugPend} partido{jugPend !== 1 ? 's' : ''} sin pagar · ${deudaBruta.toLocaleString('es-MX')}
+            </span>
+          )}
+
+          {/* Saldo adelantado */}
+          {saldo > 0 && (
+            <span style={{ color: '#10b981', fontSize: '.8rem' }}>
+              ↑ ${saldo.toLocaleString('es-MX')} adelantado
+              {saldoLibre > 0 && ` · $${saldoLibre.toLocaleString('es-MX')} para futuros`}
+            </span>
+          )}
+
+          {/* Badge de estado */}
+          {alCorriente && (
+            <span className="badge win" style={{ alignSelf: 'flex-start' }}>✓ Al corriente</span>
+          )}
+          {cubiertoPorSaldo && (
+            <span className="badge win" style={{ alignSelf: 'flex-start' }}>✓ Cubierto por saldo</span>
+          )}
+          {!alCorriente && !cubiertoPorSaldo && (
+            <strong style={{ fontSize: '.88rem', color: 'var(--red)' }}>
+              Pendiente: ${pendienteNeto.toLocaleString('es-MX')}
+            </strong>
+          )}
+        </div>
+
+        {/* Botón registrar pago — derecha */}
+        <button
+          className="btn secondary"
+          style={{ fontSize: '.8rem', flexShrink: 0 }}
+          onClick={() => setOpen(o => !o)}
+        >
           💸 Registrar pago
         </button>
       </div>
+
+      {/* Formulario expandible */}
       {open && (
-        <div className="arb-equipo-form" style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', alignItems: 'center', width: '100%', marginTop: '.5rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', alignItems: 'center', marginTop: '.8rem', paddingTop: '.8rem', borderTop: '1px solid var(--border)' }}>
           <input
             type="number" min={1}
             style={{ width: 110, padding: '.3rem .5rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
