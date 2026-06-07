@@ -80,7 +80,6 @@ function OrgPanelApp({ profile }) {
   const handleLogout = async () => {
     localStorage.removeItem('ligaActualId');
     await sb.auth.signOut();
-    // El onAuthStateChange en auth.js dispara 'auth-change' → main.js renderiza la vista pública
   };
 
   const abrirLiga = useCallback(liga => {
@@ -301,7 +300,6 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
     setEquipos(eqs);
     setPartidos(pts);
     setLoading(false);
-    // Snapshot offline
     try {
       await saveSnapshot(l.id, { liga: l, equipos: eqs, partidos: pts });
       const key = (l.alias || l.codigo).toLowerCase();
@@ -311,7 +309,6 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // Actualizar nombre en topbar cuando liga.nombre cambia
   useEffect(() => {
     if (liga?.nombre) onNombreChange(liga.nombre);
   }, [liga?.nombre]);
@@ -447,7 +444,6 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
       {Array.from({ length: vueltas }, (_, idx) => {
         const v = idx + 1;
 
-        // Construir lista de encuentros con su partido asociado
         const encuentros = fixture.map((enc, i) => {
           const eA = v === 1 ? enc.local : enc.visitante;
           const eB = v === 1 ? enc.visitante : enc.local;
@@ -459,7 +455,6 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
           return { eA, eB, p, i };
         });
 
-        // Pendientes primero, jugados al final (dentro de cada grupo: orden original)
         const pendientes = encuentros.filter(e => !e.p?.jugado);
         const jugados    = encuentros.filter(e =>  e.p?.jugado);
         const ordenados  = [...pendientes, ...jugados];
@@ -520,7 +515,6 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   const [eqA,      setEqA]      = useState('');
   const [eqB,      setEqB]      = useState('');
   const [ganSimple, setGanSimple] = useState('');
-  // sets como array de { a: string, b: string }
   const [sets, setSets] = useState(() => reglas.map(() => ({ a: '', b: '' })));
 
   const handleSubmit = async e => {
@@ -557,7 +551,6 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
       });
       toast(`✓ ${eqA} ${sA}:${sB} ${eqB}`);
       await notifyDesdePartidoGuardado(liga, guardado);
-      // reset form
       setFecha(''); setEqA(''); setEqB(''); setGanSimple('');
       setSets(reglas.map(() => ({ a: '', b: '' })));
       refresh();
@@ -607,7 +600,6 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
             </div>
           </div>
 
-          {/* Sets o ganador simple */}
           <div style={{ marginTop: '1rem' }}>
             {!usarSets ? (
               <div className="set-block">
@@ -628,7 +620,6 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
                   const setsParaGanar = Math.ceil(reglas.length / 2);
 
                   if (esDesempate) {
-                    // Calcular ganados en sets anteriores con valores completos
                     let sA = 0, sB = 0, todosCompletos = true;
                     for (let j = 0; j < i; j++) {
                       const pA = parseInt(sets[j]?.a);
@@ -636,10 +627,8 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
                       if (isNaN(pA) || isNaN(pB)) { todosCompletos = false; break; }
                       if (pA > pB) sA++; else sB++;
                     }
-                    // Solo mostrar si todos los sets anteriores están completos Y hay empate
                     if (!todosCompletos || sA !== sB) return null;
                   } else {
-                    // Para sets normales, ocultar si ya hay ganador en sets anteriores
                     let sA = 0, sB = 0;
                     for (let j = 0; j < i; j++) {
                       const pA = parseInt(sets[j]?.a);
@@ -779,11 +768,26 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   // Saldo adelantado total en caja (dinero recibido, aún no asignado a partido)
   const arbAdelantadoTotal = equipos.reduce((s, e) => s + (e.arb_saldo || 0), 0);
 
-  // Total recibido de arbitrajes = cobrado en partidos + saldo en caja
-  const arbCobTotal = arbCobPartidos + arbAdelantadoTotal;
+  // ── FIX BUG 2: Arbitrajes cubiertos por saldo (no marcados como pago_arb=true) ──
+  // Cuando un equipo tiene saldo y partidos sin marcar, esos partidos están
+  // efectivamente cubiertos aunque pago_arb siga en false. Hay que sumarlos
+  // al total cobrado y NO contarlos como pendiente.
+  const arbCubiertosPorSaldo = equipos.reduce((suma, eq) => {
+    const partidosPendEq = norm.filter(p =>
+      (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
+      (p.equipo_b === eq.nombre && !p.pago_arb_b)
+    ).length;
+    const deudaBruta = partidosPendEq * precioA;
+    const saldo = eq.arb_saldo || 0;
+    // Cuánto del saldo cubre deuda actual (no el sobrante para futuros)
+    return suma + Math.min(saldo, deudaBruta);
+  }, 0);
 
-  // Pendiente real por equipo = partidos jugados no pagados - saldo disponible de ESE equipo
-  // (el saldo de un equipo no cancela deudas de otro)
+  // Total real cobrado = partidos marcados + saldo que cubre partidos actuales
+  // El saldo "libre" (sobrante para futuros) NO se cuenta como cobrado aún
+  const arbCobTotal = arbCobPartidos + arbCubiertosPorSaldo;
+
+  // Pendiente real por equipo = deuda de partidos jugados menos saldo del equipo
   const arbPendTotal = equipos.reduce((suma, eq) => {
     const partidosPendEq = norm.filter(p =>
       (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
@@ -794,6 +798,17 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
     return suma + Math.max(0, deudaBruta - saldo);
   }, 0);
 
+  // Saldo libre = saldo que sobra después de cubrir deuda actual (para futuros partidos)
+  const arbSaldoLibreTotal = equipos.reduce((suma, eq) => {
+    const partidosPendEq = norm.filter(p =>
+      (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
+      (p.equipo_b === eq.nombre && !p.pago_arb_b)
+    ).length;
+    const deudaBruta = partidosPendEq * precioA;
+    const saldo = eq.arb_saldo || 0;
+    return suma + Math.max(0, saldo - deudaBruta);
+  }, 0);
+
   const pagarInscripcion = async id => {
     if (!window.confirm('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
@@ -802,15 +817,7 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   };
 
   const pagarArb = async (id, campo) => {
-    // Marcar el partido como pagado
     await actualizarPartido(id, { [campo]: true });
-
-    // Si el equipo tenía saldo adelantado, descontarlo para evitar doble conteo.
-    // El saldo adelantado ya "anticipaba" este pago — si ahora se marca manualmente
-    // es porque el dinero entró por otra vía, así que el saldo debe quedar intacto.
-    // PERO si el saldo cubre este partido, significa que YA está pagado con ese saldo,
-    // así que marcar pago_arb manualmente es correcto y no hay que tocar el saldo.
-    // Conclusión: no modificar arb_saldo aquí — el saldo se gestiona solo desde PagoEquipo.
     refresh();
     toast('Arbitraje registrado ✓');
   };
@@ -834,15 +841,15 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
               : <div className="resumen-fin-ok">✓</div>}
           </div>
           <div className="resumen-fin-card">
-            <div className="resumen-fin-val">${arbCobPartidos.toLocaleString('es-MX')}</div>
+            <div className="resumen-fin-val">${arbCobTotal.toLocaleString('es-MX')}</div>
             <div className="resumen-fin-lbl">Arbitrajes cobrados</div>
             {arbPendTotal > 0
               ? <div className="resumen-fin-pend">Pendiente ${arbPendTotal.toLocaleString('es-MX')}</div>
               : <div className="resumen-fin-ok">✓ Al corriente</div>}
           </div>
-          {arbAdelantadoTotal > 0 && (
+          {arbSaldoLibreTotal > 0 && (
             <div className="resumen-fin-card">
-              <div className="resumen-fin-val" style={{ color: '#10b981' }}>${arbAdelantadoTotal.toLocaleString('es-MX')}</div>
+              <div className="resumen-fin-val" style={{ color: '#10b981' }}>${arbSaldoLibreTotal.toLocaleString('es-MX')}</div>
               <div className="resumen-fin-lbl">Saldo adelantado en caja</div>
               <div className="resumen-fin-ok">Cubre futuros partidos</div>
             </div>
@@ -918,28 +925,23 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
 
   const norm = partidos.filter(p => !p.es_playoff && p.jugado);
 
-  // Partidos jugados de este equipo con pago pendiente
   const pendientes = norm.filter(p =>
     (p.equipo_a === eq.nombre && !p.pago_arb_a) ||
     (p.equipo_b === eq.nombre && !p.pago_arb_b)
   ).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
   const jugPend    = pendientes.length;
-  const deudaBruta = jugPend * precioA;         // lo que deben por partidos jugados
-  const saldo      = eq.arb_saldo || 0;         // saldo a favor de ESTE equipo
-  // Lo que falta cobrar real = deuda de partidos jugados menos saldo disponible
+  const deudaBruta = jugPend * precioA;
+  const saldo      = eq.arb_saldo || 0;
   const pendienteNeto = Math.max(0, deudaBruta - saldo);
-  // Saldo sobrante después de cubrir deuda de jugados (ya cubiertos pero guardados)
   const saldoLibre = Math.max(0, saldo - deudaBruta);
 
   const confirmar_ = async () => {
     const m = parseInt(monto);
     if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
 
-    // El nuevo saldo = saldo actual + monto recibido ahora
     let resto = saldo + m;
 
-    // Aplicar el saldo a los partidos jugados pendientes en orden cronológico
     for (const p of pendientes) {
       if (resto < precioA) break;
       const campo = p.equipo_a === eq.nombre ? 'pago_arb_a' : 'pago_arb_b';
@@ -947,7 +949,6 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
       resto -= precioA;
     }
 
-    // Guardar lo que sobra como saldo a favor para futuros partidos
     await actualizarEquipo(eq.id, { arb_saldo: resto });
     toast(`✓ $${m.toLocaleString('es-MX')} registrado${resto > 0 ? ` — Saldo a favor: $${resto.toLocaleString('es-MX')}` : ''}`);
     setOpen(false);
@@ -955,27 +956,30 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
     refresh();
   };
 
-  const alCorriente = jugPend === 0 && saldo === 0;
+  const alCorriente     = jugPend === 0 && saldo === 0;
   const cubiertoPorSaldo = jugPend > 0 && pendienteNeto === 0;
 
   return (
     <div className="arb-equipo-row">
       <div className="arb-equipo-nom">{eq.nombre}</div>
       <div className="arb-equipo-detalle">
-        {/* Deuda de partidos jugados */}
-        {jugPend > 0 && (
+
+        {/* ── FIX BUG 1: Solo mostrar advertencia si NO está cubierta por saldo ── */}
+        {jugPend > 0 && !cubiertoPorSaldo && (
           <span className="muted" style={{ fontSize: '.8rem' }}>
             ⚠ {jugPend} partido{jugPend !== 1 ? 's' : ''} jugado{jugPend !== 1 ? 's' : ''} sin pagar
             {' '}(${deudaBruta.toLocaleString('es-MX')})
           </span>
         )}
-        {/* Saldo a favor (adelantado) de este equipo */}
+
+        {/* Saldo a favor */}
         {saldo > 0 && (
           <span style={{ color: '#10b981', fontSize: '.8rem' }}>
             ↑ Adelantado: ${saldo.toLocaleString('es-MX')}
             {saldoLibre > 0 && ` · $${saldoLibre.toLocaleString('es-MX')} para futuros`}
           </span>
         )}
+
         {/* Estado final */}
         {alCorriente && (
           <span className="badge win">✓ Al corriente</span>
@@ -1015,9 +1019,6 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
-//  TAB: COMENTARIOS (vista del organizador)
-// ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
 //  TAB: COMENTARIOS (vista del organizador)
 // ════════════════════════════════════════════════════════════
@@ -1218,7 +1219,6 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   const quitar = async (miembro) => {
     if (!window.confirm('¿Quitar este co-admin?')) return;
     await quitarMiembro(liga.id, miembro.user_id);
-    const m = await getMisLigas(liga.id).catch(() => null);
     setMiembros(prev => prev.filter(x => x.id !== miembro.id));
     toast('Co-admin eliminado');
   };
@@ -1324,7 +1324,6 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
           Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
         </p>
 
-        {/* Alias */}
         <div style={{ marginBottom: '1.2rem' }}>
           <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>
             Nombre corto personalizado
@@ -1346,7 +1345,6 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
           {aliasMsg.ok  && <div style={{ color: 'var(--green)', fontSize: '.82rem', marginTop: '.4rem' }}>{aliasMsg.ok}</div>}
         </div>
 
-        {/* Código */}
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
           <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.6rem' }}>
             Código de respaldo (siempre funciona)
@@ -1468,8 +1466,6 @@ function TabUpgrade() {
   );
 }
 
-
-
 // ════════════════════════════════════════════════════════════
 //  HELPERS PUROS
 // ════════════════════════════════════════════════════════════
@@ -1517,7 +1513,6 @@ function leerSets(sets, reglas) {
   const setsParaGanar = Math.ceil(reglas.length / 2);
 
   for (let i = 0; i < reglas.length; i++) {
-    // Si ya hay ganador, no pedir más sets
     if (sA >= setsParaGanar || sB >= setsParaGanar) break;
 
     const pA = parseInt(sets[i]?.a);
