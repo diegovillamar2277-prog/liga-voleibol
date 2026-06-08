@@ -696,11 +696,16 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
               ? <div className="resumen-fin-pend">Pendiente ${arbPendTotal.toLocaleString('es-MX')}</div>
               : <div className="resumen-fin-ok">Al corriente</div>}
           </div>
-          {arbSaldoLibreTotal > 0 && (
+          {/* Tarjeta saldo adelantado: solo si permitirAdelanto esta activo */}
+          {permitirAdelanto && (
             <div className="resumen-fin-card">
-              <div className="resumen-fin-val" style={{ color: '#10b981' }}>${arbSaldoLibreTotal.toLocaleString('es-MX')}</div>
+              <div className="resumen-fin-val" style={{ color: arbSaldoLibreTotal > 0 ? '#10b981' : 'var(--muted)' }}>
+                ${'{'}arbSaldoLibreTotal.toLocaleString('es-MX'){'}'}
+              </div>
               <div className="resumen-fin-lbl">Saldo adelantado en caja</div>
-              <div className="resumen-fin-ok">Cubre futuros partidos</div>
+              {arbSaldoLibreTotal > 0
+                ? <div className="resumen-fin-ok">Cubre futuros partidos</div>
+                : <div className="resumen-fin-ok">Sin saldo en caja</div>}
             </div>
           )}
         </div>
