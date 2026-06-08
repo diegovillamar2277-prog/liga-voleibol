@@ -700,7 +700,7 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
           {permitirAdelanto && (
             <div className="resumen-fin-card">
               <div className="resumen-fin-val" style={{ color: arbSaldoLibreTotal > 0 ? '#10b981' : 'var(--muted)' }}>
-                ${'{'}arbSaldoLibreTotal.toLocaleString('es-MX'){'}'}
+                {'$' + arbSaldoLibreTotal.toLocaleString('es-MX')}
               </div>
               <div className="resumen-fin-lbl">Saldo adelantado en caja</div>
               {arbSaldoLibreTotal > 0
