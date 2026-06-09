@@ -1,7 +1,7 @@
 // ============================================================
-//  liga-dashboard.jsx  (versión con todos los fixes aplicados)
+//  liga-dashboard.jsx  — Panel del organizador
 // ============================================================
-import { AuthProvider } from '../context/AuthContext.jsx';
+import { AuthProvider, useAuth } from '../context/AuthContext.jsx';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
@@ -14,8 +14,7 @@ import {
   getComentarios, eliminarComentario,
 } from '../lib/db.js';
 import { toast, formatFecha } from '../lib/ui.js';
-import { useAuth } from '../context/AuthContext.jsx';
-import { PLANES } from '../lib/planes.js';
+import { PLANES, getPlan } from '../lib/planes.js';
 import ModalPago from '../components/ModalPago.jsx';
 import TabPlayoffs from '../liga/TabPlayoffs.jsx';
 import { saveSnapshot } from '../lib/offline.js';
@@ -35,11 +34,14 @@ export function renderOrgPanel(container, profile) {
   _root.render(<AuthProvider><OrgPanelApp profile={profile} /></AuthProvider>);
 }
 
+// ════════════════════════════════════════════════════════════
+//  APP PRINCIPAL
+// ════════════════════════════════════════════════════════════
 function OrgPanelApp({ profile }) {
   const currentProfile = profile;
-  const [misLigas, setMisLigas]     = useState(null);
+  const [misLigas,   setMisLigas]   = useState(null);
   const [ligaActual, setLigaActual] = useState(null);
-  const [screen, setScreen]         = useState('loading');
+  const [screen,     setScreen]     = useState('loading');
 
   useEffect(() => {
     if (!currentProfile) return;
@@ -71,10 +73,13 @@ function OrgPanelApp({ profile }) {
   const volverASelector = useCallback(() => {
     localStorage.removeItem('ligaActualId');
     setLigaActual(null);
-    if (misLigas?.length === 0)      setScreen('sinligas');
-    else if (misLigas?.length === 1) setScreen('sinligas');
-    else                             setScreen('selector');
-  }, [misLigas]);
+    getMisLigas(currentProfile.id).then(ligas => {
+      setMisLigas(ligas);
+      if (ligas.length === 0) setScreen('sinligas');
+      else if (ligas.length === 1) { setLigaActual(ligas[0]); setScreen('liga'); }
+      else setScreen('selector');
+    });
+  }, [currentProfile]);
 
   const ligaNombre = ligaActual?.nombre || 'Mis ligas';
 
@@ -83,8 +88,13 @@ function OrgPanelApp({ profile }) {
       <header className="topbar">
         <div className="topbar-left">
           <span className="topbar-logo">🏐</span>
-          <span className="topbar-title" style={{ cursor: ligaActual ? 'pointer' : 'default' }}
-            onClick={ligaActual ? volverASelector : undefined}>{ligaNombre}</span>
+          <span
+            className="topbar-title"
+            style={{ cursor: ligaActual ? 'pointer' : 'default' }}
+            onClick={ligaActual ? volverASelector : undefined}
+          >
+            {ligaNombre}
+          </span>
         </div>
         <div className="topbar-right">
           <span className="topbar-user">{currentProfile?.nombre || currentProfile?.email}</span>
@@ -92,16 +102,29 @@ function OrgPanelApp({ profile }) {
         </div>
       </header>
       <main id="org-main">
-        {screen === 'loading'   && <div className="loading-spinner" style={{ margin: '4rem auto' }} />}
-        {screen === 'sinligas'  && <SinLigas onCrear={irACrear} />}
-        {screen === 'selector'  && misLigas && <SelectorLigas ligas={misLigas} onSeleccionar={abrirLiga} onCrear={irACrear} />}
-        {screen === 'crear'     && <FormCrearLiga perfil={currentProfile} onCreada={abrirLiga} onCancelar={volverASelector} />}
-        {screen === 'liga'      && ligaActual && <LigaPanel ligaInicial={ligaActual} onVolver={volverASelector} onNombreChange={nombre => setLigaActual(l => ({ ...l, nombre }))} />}
+        {screen === 'loading'  && <div className="loading-spinner" style={{ margin: '4rem auto' }} />}
+        {screen === 'sinligas' && <SinLigas onCrear={irACrear} />}
+        {screen === 'selector' && misLigas && (
+          <SelectorLigas ligas={misLigas} onSeleccionar={abrirLiga} onCrear={irACrear} />
+        )}
+        {screen === 'crear' && (
+          <FormCrearLiga perfil={currentProfile} onCreada={abrirLiga} onCancelar={volverASelector} />
+        )}
+        {screen === 'liga' && ligaActual && (
+          <LigaPanel
+            ligaInicial={ligaActual}
+            onVolver={volverASelector}
+            onNombreChange={nombre => setLigaActual(l => ({ ...l, nombre }))}
+          />
+        )}
       </main>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  PANTALLAS DE SELECCIÓN
+// ════════════════════════════════════════════════════════════
 function SinLigas({ onCrear }) {
   return (
     <div className="empty-state">
@@ -114,7 +137,10 @@ function SinLigas({ onCrear }) {
 }
 
 function SelectorLigas({ ligas, onSeleccionar, onCrear }) {
+  const { maxLigasPermitidas } = useAuth();
   const ownCount = ligas.filter(l => l.miRol === 'owner').length;
+  const puedeCrear = ownCount < maxLigasPermitidas;
+
   return (
     <div className="ligas-selector">
       <h2>Mis ligas</h2>
@@ -129,65 +155,167 @@ function SelectorLigas({ ligas, onSeleccionar, onCrear }) {
             </span>
           </div>
         ))}
-        {ownCount < 2 && <div className="liga-card nueva" onClick={onCrear}><div className="liga-card-nombre">+ Nueva liga</div></div>}
+        {puedeCrear && (
+          <div className="liga-card nueva" onClick={onCrear}>
+            <div className="liga-card-nombre">+ Nueva liga</div>
+          </div>
+        )}
+        {!puedeCrear && (
+          <div className="liga-card nueva" onClick={onCrear} title="Ver opciones para más ligas">
+            <div className="liga-card-nombre">🔒 Más ligas</div>
+            <div className="liga-card-temp muted" style={{ fontSize: '.75rem' }}>
+              Límite del plan alcanzado
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  FORMULARIO CREAR LIGA
+// ════════════════════════════════════════════════════════════
 function FormCrearLiga({ perfil, onCreada, onCancelar }) {
-  const [nombre, setNombre]   = useState('');
-  const [temp, setTemp]       = useState('');
-  const [error, setError]     = useState('');
-  const [limite, setLimite]   = useState(false);
+  const { plan, maxLigasPermitidas } = useAuth();
+  const [nombre,  setNombre]  = useState('');
+  const [temp,    setTemp]    = useState('');
+  const [error,   setError]   = useState('');
+  const [limite,  setLimite]  = useState(false);
+  const [conteo,  setConteo]  = useState(0);
   const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(true);
+  const [mostrarPago, setMostrarPago] = useState(false);
 
   useEffect(() => {
-    contarLigasDeUsuario(perfil.id).then(n => { setLimite(n >= 2); setLoading(false); });
-  }, [perfil.id]);
+    contarLigasDeUsuario(perfil.id).then(n => {
+      setConteo(n);
+      setLimite(n >= maxLigasPermitidas);
+      setLoading(false);
+    });
+  }, [perfil.id, maxLigasPermitidas]);
 
   const enviar = async e => {
-    e.preventDefault(); setError('');
+    e.preventDefault();
+    setError('');
     try {
-      const liga = await crearLiga({ nombre, temporada: temp, ownerId: perfil.id, config: {}, reglas: [], playoffsCfg: {} });
-      toast('Liga creada'); onCreada(liga);
-    } catch (err) { setError(err.message); }
+      const liga = await crearLiga({
+        nombre,
+        temporada: temp,
+        ownerId: perfil.id,
+        config: {},
+        reglas: [],
+        playoffsCfg: {},
+      });
+      toast('Liga creada ✓');
+      onCreada(liga);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const enviarPeticion_ = async e => {
     e.preventDefault();
     if (!mensaje.trim()) { toast('Escribe un mensaje', 'error'); return; }
-    try { await enviarPeticion(perfil.id, mensaje); toast('Peticion enviada'); }
-    catch (err) { toast(err.message, 'error'); }
+    try {
+      await enviarPeticion(perfil.id, mensaje);
+      toast('Petición enviada ✓');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   };
 
   if (loading) return <div className="loading-spinner" style={{ margin: '4rem auto' }} />;
 
-  if (limite) return (
-    <div className="empty-state">
-      <div className="empty-icon">⚠️</div>
-      <h2>Limite de 2 ligas alcanzado</h2>
-      <p className="muted">Envia una peticion al administrador para crear mas.</p>
-      <form onSubmit={enviarPeticion_} style={{ maxWidth: 400, margin: '1.5rem auto 0' }}>
-        <textarea rows={3} style={{ width: '100%', padding: '.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
-          placeholder="Por que necesitas mas ligas?" value={mensaje} onChange={e => setMensaje(e.target.value)} />
-        <button type="submit" className="btn" style={{ marginTop: '.6rem' }}>Enviar peticion</button>
-      </form>
-    </div>
-  );
+  // Límite alcanzado
+  if (limite) {
+    const siguientePlan = plan === 'basico' ? 'Medio' : plan === 'medio' ? 'Top' : null;
 
+    return (
+      <>
+        {mostrarPago && <ModalPago onCerrar={() => setMostrarPago(false)} />}
+        <div className="empty-state">
+          <div className="empty-icon">⚠️</div>
+          <h2>Límite de ligas alcanzado</h2>
+          <p className="muted" style={{ marginBottom: '1rem' }}>
+            Tu plan <strong>{plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> permite
+            hasta <strong>{maxLigasPermitidas} {maxLigasPermitidas === 1 ? 'liga' : 'ligas'}</strong> activas
+            y ya tienes {conteo}.
+          </p>
+
+          {siguientePlan && (
+            <div className="card" style={{ textAlign: 'left', maxWidth: 400, margin: '0 auto 1.2rem' }}>
+              <p className="card-subtitle">Actualiza al plan {siguientePlan}</p>
+              {siguientePlan === 'Medio' && (
+                <p style={{ fontSize: '.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+                  Plan Medio te da hasta <strong>2 ligas</strong> + playoffs + finanzas + vista pública.
+                </p>
+              )}
+              {siguientePlan === 'Top' && (
+                <p style={{ fontSize: '.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+                  Plan Top te da hasta <strong>3 ligas</strong> + todas las funciones desbloqueadas.
+                </p>
+              )}
+              <button className="btn" style={{ width: '100%' }} onClick={() => setMostrarPago(true)}>
+                🚀 Ver planes
+              </button>
+            </div>
+          )}
+
+          {!siguientePlan && (
+            <>
+              <p className="muted" style={{ marginBottom: '1rem' }}>
+                Estás en el plan máximo. Envía una petición al administrador si necesitas más ligas.
+              </p>
+              <form onSubmit={enviarPeticion_} style={{ maxWidth: 400, margin: '0 auto' }}>
+                <textarea
+                  rows={3}
+                  style={{ width: '100%', padding: '.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+                  placeholder="¿Por qué necesitas más ligas?"
+                  value={mensaje}
+                  onChange={e => setMensaje(e.target.value)}
+                />
+                <button type="submit" className="btn" style={{ marginTop: '.6rem' }}>Enviar petición</button>
+              </form>
+            </>
+          )}
+
+          <button className="btn secondary" style={{ marginTop: '1rem' }} onClick={onCancelar}>
+            Cancelar
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  // Formulario normal
   return (
     <div className="empty-state" style={{ maxWidth: 480 }}>
       <h2>Nueva liga</h2>
+      <p className="muted" style={{ marginBottom: '1.2rem', fontSize: '.85rem' }}>
+        Usarás {conteo + 1} de {maxLigasPermitidas} liga{maxLigasPermitidas > 1 ? 's' : ''} de tu plan.
+      </p>
       <form onSubmit={enviar}>
         <div className="auth-field">
           <label>Nombre de la liga *</label>
-          <input type="text" placeholder="Liga Voleibol 2025" required maxLength={60} value={nombre} onChange={e => setNombre(e.target.value)} />
+          <input
+            type="text"
+            placeholder="Liga Voleibol 2025"
+            required
+            maxLength={60}
+            value={nombre}
+            onChange={e => setNombre(e.target.value)}
+          />
         </div>
         <div className="auth-field">
           <label>Temporada / Año</label>
-          <input type="text" placeholder="2025" maxLength={20} value={temp} onChange={e => setTemp(e.target.value)} />
+          <input
+            type="text"
+            placeholder="2025"
+            maxLength={20}
+            value={temp}
+            onChange={e => setTemp(e.target.value)}
+          />
         </div>
         {error && <div className="auth-error">{error}</div>}
         <div className="flex" style={{ gap: '.6rem', marginTop: '1rem' }}>
@@ -199,19 +327,22 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  PANEL DE LIGA
+// ════════════════════════════════════════════════════════════
 const TABS = [
-  { id: 'tabla',        label: 'Tabla'          },
-  { id: 'fixture',      label: 'Fixture'        },
-  { id: 'partidos',     label: 'Partidos'       },
-  { id: 'equipos',      label: 'Equipos'        },
-  { id: 'playoffs',     label: '🏆 Playoffs'    },
-  { id: 'finanzas',     label: '💰 Finanzas'    },
-  { id: 'comentarios',  label: '💬 Comentarios' },
-  { id: 'config',       label: '⚙ Config'      },
+  { id: 'tabla',       label: 'Tabla'           },
+  { id: 'fixture',     label: 'Fixture'         },
+  { id: 'partidos',    label: 'Partidos'        },
+  { id: 'equipos',     label: 'Equipos'         },
+  { id: 'playoffs',    label: '🏆 Playoffs',    requiere: 'puedePlayoffs'    },
+  { id: 'finanzas',    label: '💰 Finanzas',    requiere: 'puedeFinanzas'    },
+  { id: 'comentarios', label: '💬 Comentarios', requiere: 'puedeComentarios' },
+  { id: 'config',      label: '⚙ Config'       },
 ];
 
 function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
-  const { isPro } = useAuth();
+  const { puedePlayoffs, puedeFinanzas, puedeComentarios } = useAuth();
   const [activeTab, setActiveTab] = useState('tabla');
   const [liga,      setLiga]      = useState(null);
   const [equipos,   setEquipos]   = useState([]);
@@ -219,7 +350,11 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
   const [loading,   setLoading]   = useState(true);
 
   const cargar = useCallback(async (ligaId = ligaInicial.id) => {
-    const [l, eqs, pts] = await Promise.all([getLigaById(ligaId), getEquipos(ligaId), getPartidos(ligaId)]);
+    const [l, eqs, pts] = await Promise.all([
+      getLigaById(ligaId),
+      getEquipos(ligaId),
+      getPartidos(ligaId),
+    ]);
     setLiga(l); setEquipos(eqs); setPartidos(pts); setLoading(false);
     try {
       await saveSnapshot(l.id, { liga: l, equipos: eqs, partidos: pts });
@@ -231,7 +366,7 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => { if (liga?.nombre) onNombreChange(liga.nombre); }, [liga?.nombre]);
 
-  const refresh = useCallback(() => cargar(liga?.id || ligaInicial.id), [cargar, liga?.id]);
+  const refresh    = useCallback(() => cargar(liga?.id || ligaInicial.id), [cargar, liga?.id]);
   const updateLiga = useCallback(cambios => {
     setLiga(prev => ({ ...prev, ...cambios }));
     if (cambios.nombre) onNombreChange(cambios.nombre);
@@ -240,17 +375,28 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
   if (loading) return <div className="loading-spinner" style={{ margin: '4rem auto' }} />;
   if (!liga)   return <p className="empty">Error cargando la liga.</p>;
 
+  const tabBloqueado = (tab) => {
+    if (!tab.requiere) return false;
+    if (tab.requiere === 'puedePlayoffs'    && !puedePlayoffs)    return true;
+    if (tab.requiere === 'puedeFinanzas'    && !puedeFinanzas)    return true;
+    if (tab.requiere === 'puedeComentarios' && !puedeComentarios) return true;
+    return false;
+  };
+
   const tabProps = { liga, equipos, partidos, refresh, updateLiga };
 
   return (
     <>
       <nav className="tab-nav">
         {TABS.map(t => {
-          const bloqueado = !isPro && ['playoffs', 'finanzas'].includes(t.id);
+          const bloqueado = tabBloqueado(t);
           return (
-            <button key={t.id} className={activeTab === t.id ? 'active' : ''}
+            <button
+              key={t.id}
+              className={activeTab === t.id ? 'active' : ''}
               onClick={() => setActiveTab(bloqueado ? 'upgrade' : t.id)}
-              title={bloqueado ? 'Disponible en Plan Pro' : ''}>
+              title={bloqueado ? 'Disponible en un plan superior' : ''}
+            >
               {t.label}{bloqueado ? ' 🔒' : ''}
             </button>
           );
@@ -265,16 +411,99 @@ function LigaPanel({ ligaInicial, onVolver, onNombreChange }) {
         {activeTab === 'playoffs'    && <TabPlayoffs   liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
         {activeTab === 'finanzas'    && <TabFinanzas   {...tabProps} />}
         {activeTab === 'comentarios' && <TabComentarios liga={liga} />}
-        {activeTab === 'config'      && <TabConfig     {...tabProps} onEliminar={async () => {
-          if (!window.confirm('Eliminar la liga "' + liga.nombre + '"? Esta accion no se puede deshacer.')) return;
-          try { await eliminarLiga(liga.id); localStorage.removeItem('ligaActualId'); toast('Liga eliminada'); onVolver(); }
-          catch (err) { toast(err.message, 'error'); }
-        }} onCrearNueva={onVolver} />}
+        {activeTab === 'config'      && (
+          <TabConfig
+            {...tabProps}
+            onEliminar={async () => {
+              if (!window.confirm('Eliminar la liga "' + liga.nombre + '"? Esta acción no se puede deshacer.')) return;
+              try {
+                await eliminarLiga(liga.id);
+                localStorage.removeItem('ligaActualId');
+                toast('Liga eliminada');
+                onVolver();
+              } catch (err) {
+                toast(err.message, 'error');
+              }
+            }}
+            onCrearNueva={onVolver}
+          />
+        )}
       </section>
     </>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB UPGRADE
+// ════════════════════════════════════════════════════════════
+function TabUpgrade() {
+  const [mostrarPago, setMostrarPago] = useState(false);
+  const { plan } = useAuth();
+  const esMedio = plan === 'medio';
+
+  return (
+    <>
+      {mostrarPago && <ModalPago onCerrar={() => setMostrarPago(false)} />}
+      <div className="empty-state" style={{ maxWidth: 480 }}>
+        <div className="empty-icon">🔒</div>
+        <h2>Función <span>{esMedio ? 'Top' : 'de pago'}</span></h2>
+        <p className="muted" style={{ marginBottom: '1.5rem' }}>
+          {esMedio
+            ? 'Esta función está disponible en el Plan Top.'
+            : 'Esta función requiere un plan de pago.'
+          }
+        </p>
+
+        {plan === 'basico' && (
+          <div className="card" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+            <p className="card-subtitle">Plan Medio incluye</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', fontSize: '.88rem' }}>
+              <span>⚡ 2 ligas activas</span>
+              <span>✅ Vista pública incluida</span>
+              <span>✅ Bracket de playoffs</span>
+              <span>✅ Módulo de finanzas</span>
+              <span>✅ Equipos ilimitados</span>
+            </div>
+            <p style={{ marginTop: '.8rem', fontSize: '.82rem', color: 'var(--accent)' }}>
+              Desde $99 MXN/mes
+            </p>
+          </div>
+        )}
+
+        {plan === 'medio' && (
+          <div className="card" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+            <p className="card-subtitle">Plan Top incluye además</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', fontSize: '.88rem' }}>
+              <span>🏆 3 ligas activas</span>
+              <span>✅ Co-administradores</span>
+              <span>✅ Alias personalizado</span>
+              <span>✅ Diseño de vista pública</span>
+              <span>✅ Comentarios y sugerencias</span>
+            </div>
+            <p style={{ marginTop: '.8rem', fontSize: '.82rem', color: 'var(--accent)' }}>
+              Desde $149 MXN/mes
+            </p>
+          </div>
+        )}
+
+        <button
+          className="btn"
+          style={{ width: '100%', padding: '.8rem', fontSize: '1rem' }}
+          onClick={() => setMostrarPago(true)}
+        >
+          🚀 Ver planes y precios
+        </button>
+        <p className="muted" style={{ fontSize: '.78rem', marginTop: '.8rem' }}>
+          Sin renovación automática · Pago seguro con MercadoPago
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  TAB TABLA
+// ════════════════════════════════════════════════════════════
 export function TabTabla({ liga, equipos = [], partidos = [] }) {
   const cfg       = liga.config || {};
   const usarPts   = cfg.usarPuntos  !== false;
@@ -299,7 +528,9 @@ export function TabTabla({ liga, equipos = [], partidos = [] }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '.5rem' }}>
         <h2 style={{ margin: 0 }}>Tabla de <span>Posiciones</span></h2>
-        <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={exportar}>Exportar imagen</button>
+        <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={exportar}>
+          Exportar imagen
+        </button>
       </div>
       <div ref={tablaRef} className="tabla-wrap">
         <table className="tabla-pos">
@@ -331,6 +562,9 @@ export function TabTabla({ liga, equipos = [], partidos = [] }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB FIXTURE
+// ════════════════════════════════════════════════════════════
 export function TabFixture({ liga, equipos = [], partidos = [] }) {
   const cfg     = liga.config || {};
   const vueltas = cfg.vueltas || 2;
@@ -358,8 +592,14 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
           <div key={v}>
             <h3 style={{ marginTop: '1.2rem' }}>
               Vuelta {v}
-              {pendientes.length > 0 && <span className="badge pending" style={{ marginLeft: '.6rem', fontSize: '.72rem' }}>{pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''}</span>}
-              {pendientes.length === 0 && jugados.length > 0 && <span className="badge win" style={{ marginLeft: '.6rem', fontSize: '.72rem' }}>Completa</span>}
+              {pendientes.length > 0 && (
+                <span className="badge pending" style={{ marginLeft: '.6rem', fontSize: '.72rem' }}>
+                  {pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {pendientes.length === 0 && jugados.length > 0 && (
+                <span className="badge win" style={{ marginLeft: '.6rem', fontSize: '.72rem' }}>Completa</span>
+              )}
             </h3>
             <div className="fixture-list">
               {ordenados.map(({ eA, eB, p, i }) => (
@@ -382,6 +622,9 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB PARTIDOS
+// ════════════════════════════════════════════════════════════
 const REGLAS_DEFAULT = [
   { nombre: 'Set 1', puntos: 25, diferencia: 2, usarPuntosSet: true },
   { nombre: 'Set 2', puntos: 25, diferencia: 2, usarPuntosSet: true },
@@ -410,7 +653,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
     let setsData = [], sA = 0, sB = 0, ganador = null;
 
     if (!usarSets) {
-      if (!ganSimple) { toast('Selecciona quien gano', 'error'); return; }
+      if (!ganSimple) { toast('Selecciona quién ganó', 'error'); return; }
       ganador = ganSimple;
       sA = ganador === 'A' ? 1 : 0;
       sB = ganador === 'B' ? 1 : 0;
@@ -427,13 +670,13 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
     if (existe) { toast('Ya existe este partido en esa vuelta', 'error'); return; }
 
     try {
-      const precioArb    = liga.config?.precioArbitraje ?? 120;
-      const equipoAData  = equipos.find(e => e.nombre === eqA);
-      const equipoBData  = equipos.find(e => e.nombre === eqB);
-      const saldoA       = equipoAData?.arb_saldo || 0;
-      const saldoB       = equipoBData?.arb_saldo || 0;
-      const pagoA        = saldoA >= precioArb;
-      const pagoB        = saldoB >= precioArb;
+      const precioArb   = liga.config?.precioArbitraje ?? 120;
+      const equipoAData = equipos.find(e => e.nombre === eqA);
+      const equipoBData = equipos.find(e => e.nombre === eqB);
+      const saldoA      = equipoAData?.arb_saldo || 0;
+      const saldoB      = equipoBData?.arb_saldo || 0;
+      const pagoA       = saldoA >= precioArb;
+      const pagoB       = saldoB >= precioArb;
 
       const guardado = await guardarPartido(liga.id, {
         vuelta, fecha, equipo_a: eqA, equipo_b: eqB,
@@ -456,7 +699,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   };
 
   const eliminar = async id => {
-    if (!window.confirm('Eliminar este partido?')) return;
+    if (!window.confirm('¿Eliminar este partido?')) return;
     await eliminarPartido(id); refresh(); toast('Partido eliminado');
   };
 
@@ -532,7 +775,10 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
                   const conPts = r.usarPuntosSet !== false;
                   return (
                     <div key={i} className="set-block">
-                      <h4>{r.nombre}{esDesempate && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}</h4>
+                      <h4>
+                        {r.nombre}
+                        {esDesempate && <small style={{ color: 'var(--accent)', fontSize: '.7rem' }}> (Desempate)</small>}
+                      </h4>
                       <div className="set-score">
                         <input type="number" min={0} max={999} placeholder="Eq A" value={sets[i]?.a || ''}
                           onChange={e => setSets(prev => prev.map((s, j) => j === i ? { ...s, a: e.target.value } : s))} />
@@ -556,9 +802,10 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
           </div>
         </form>
       </div>
+
       <h2 style={{ marginTop: '2rem' }}>Partidos <span>Registrados</span></h2>
       {!norm.length
-        ? <p className="empty">No hay partidos aun.</p>
+        ? <p className="empty">No hay partidos aún.</p>
         : [...norm].sort((a, b) => a.vuelta - b.vuelta).map(p => {
           const ganN = p.ganador === 'A' ? p.equipo_a : p.equipo_b;
           return (
@@ -580,19 +827,24 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB EQUIPOS
+// ════════════════════════════════════════════════════════════
 export function TabEquipos({ liga, equipos = [], refresh }) {
   const [nombre, setNombre] = useState('');
 
   const agregar = async () => {
     const nom = nombre.trim();
     if (!nom) { toast('Escribe un nombre', 'error'); return; }
-    if (equipos.some(e => e.nombre.toLowerCase() === nom.toLowerCase())) { toast('Nombre duplicado', 'error'); return; }
+    if (equipos.some(e => e.nombre.toLowerCase() === nom.toLowerCase())) {
+      toast('Nombre duplicado', 'error'); return;
+    }
     await agregarEquipo(liga.id, nom);
     setNombre(''); refresh(); toast('Equipo agregado');
   };
 
   const eliminar = async id => {
-    if (!window.confirm('Eliminar este equipo?')) return;
+    if (!window.confirm('¿Eliminar este equipo?')) return;
     await eliminarEquipo(id); refresh(); toast('Equipo eliminado');
   };
 
@@ -622,6 +874,9 @@ export function TabEquipos({ liga, equipos = [], refresh }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB FINANZAS
+// ════════════════════════════════════════════════════════════
 export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   const cfg      = liga.config || {};
   const precioI  = cfg.precioInscripcion ?? 500;
@@ -633,8 +888,6 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
 
   const arbCobPartidos = norm.reduce((s, p) =>
     s + (p.pago_arb_a ? precioA : 0) + (p.pago_arb_b ? precioA : 0), 0);
-
-  const arbAdelantadoTotal = equipos.reduce((s, e) => s + (e.arb_saldo || 0), 0);
 
   const arbCubiertosPorSaldo = equipos.reduce((suma, eq) => {
     const pend = norm.filter(p =>
@@ -663,9 +916,9 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
   }, 0);
 
   const pagarInscripcion = async id => {
-    if (!window.confirm('Confirmar pago de inscripcion?')) return;
+    if (!window.confirm('¿Confirmar pago de inscripción?')) return;
     await actualizarEquipo(id, { inscripcion_pagada: true });
-    refresh(); toast('Inscripcion registrada');
+    refresh(); toast('Inscripción registrada');
   };
 
   const pagarArb = async (id, campo) => {
@@ -696,7 +949,6 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
               ? <div className="resumen-fin-pend">Pendiente ${arbPendTotal.toLocaleString('es-MX')}</div>
               : <div className="resumen-fin-ok">Al corriente</div>}
           </div>
-          {/* Tarjeta saldo adelantado: solo si permitirAdelanto esta activo */}
           {permitirAdelanto && (
             <div className="resumen-fin-card">
               <div className="resumen-fin-val" style={{ color: arbSaldoLibreTotal > 0 ? '#10b981' : 'var(--muted)' }}>
@@ -728,8 +980,7 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
         <div className="card" style={{ marginTop: '1.2rem' }}>
           <p className="card-subtitle">💸 Arbitrajes por equipo</p>
           <p className="muted" style={{ fontSize: '.8rem', marginBottom: '1rem' }}>
-            Registra cualquier monto. El sobrante queda como saldo a favor y se aplica a proximos partidos.
-            El saldo de un equipo no afecta a los demas.
+            Registra cualquier monto. El sobrante queda como saldo a favor y se aplica a próximos partidos.
           </p>
           {equipos.map(eq => (
             <PagoEquipo key={eq.id} eq={eq} partidos={partidos} liga={liga} precioA={precioA} refresh={refresh} />
@@ -740,7 +991,7 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
       <div className="card" style={{ marginTop: '1.2rem' }}>
         <p className="card-subtitle">Detalle por partido</p>
         {!norm.length
-          ? <p className="muted">Sin partidos jugados aun.</p>
+          ? <p className="muted">Sin partidos jugados aún.</p>
           : [...norm].sort((a, b) => {
               const aPend = (!a.pago_arb_a || !a.pago_arb_b) ? 0 : 1;
               const bPend = (!b.pago_arb_a || !b.pago_arb_b) ? 0 : 1;
@@ -776,7 +1027,7 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
 }
 
 function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
-  const [open, setOpen]   = useState(false);
+  const [open,  setOpen]  = useState(false);
   const [monto, setMonto] = useState('');
 
   const norm = partidos.filter(p => !p.es_playoff && p.jugado);
@@ -794,7 +1045,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
 
   const confirmar_ = async () => {
     const m = parseInt(monto);
-    if (!m || m < 1) { toast('Ingresa un monto valido', 'error'); return; }
+    if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
     let resto = saldo + m;
     for (const p of pendientes) {
       if (resto < precioA) break;
@@ -803,7 +1054,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
       resto -= precioA;
     }
     await actualizarEquipo(eq.id, { arb_saldo: resto });
-    const extra = resto > 0 ? ' - Saldo a favor: $' + resto.toLocaleString('es-MX') : '';
+    const extra = resto > 0 ? ' — Saldo a favor: $' + resto.toLocaleString('es-MX') : '';
     toast('$' + m.toLocaleString('es-MX') + ' registrado' + extra);
     setOpen(false); setMonto(''); refresh();
   };
@@ -821,7 +1072,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
     await actualizarEquipo(eq.id, { arb_saldo: resto });
     if (cubiertos > 0) {
       const pl = cubiertos !== 1;
-      const restMsg = resto > 0 ? ' - $' + resto.toLocaleString('es-MX') + ' restante' : '';
+      const restMsg = resto > 0 ? ' — $' + resto.toLocaleString('es-MX') + ' restante' : '';
       toast(cubiertos + ' partido' + (pl ? 's' : '') + ' cubierto' + (pl ? 's' : '') + ' con saldo' + restMsg);
     } else {
       toast('Saldo insuficiente para cubrir un arbitraje completo', 'error');
@@ -838,30 +1089,21 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
       background: 'var(--card2)', border: '1px solid var(--border2)',
       borderRadius: 'var(--radius)', padding: '.9rem 1rem', marginBottom: '.6rem',
     }}>
-      {/* Nombre centrado arriba */}
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '1rem', marginBottom: '.6rem' }}>
         {eq.nombre}
       </div>
-
-      {/* Fila: estado izq, botones der */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.6rem', flexWrap: 'wrap' }}>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', flex: 1 }}>
-          {/* Deuda — solo si no cubierta */}
           {jugPend > 0 && !cubiertoPorSaldo && (
             <span style={{ fontSize: '.8rem', color: 'var(--red)' }}>
-              {jugPend} partido{jugPend !== 1 ? 's' : ''} sin pagar - ${deudaBruta.toLocaleString('es-MX')}
+              {jugPend} partido{jugPend !== 1 ? 's' : ''} sin pagar — ${deudaBruta.toLocaleString('es-MX')}
             </span>
           )}
-
-          {/* Saldo — SIEMPRE visible para evitar ambiguedades */}
           <span style={{ color: saldo > 0 ? '#10b981' : 'var(--muted)', fontSize: '.8rem' }}>
             {'Saldo: $' + saldo.toLocaleString('es-MX')}
-            {saldoLibre > 0 && (' - $' + saldoLibre.toLocaleString('es-MX') + ' para futuros')}
+            {saldoLibre > 0 && (' — $' + saldoLibre.toLocaleString('es-MX') + ' para futuros')}
           </span>
-
-          {/* Badge estado */}
-          {alCorriente && <span className="badge win" style={{ alignSelf: 'flex-start' }}>Al corriente</span>}
+          {alCorriente      && <span className="badge win" style={{ alignSelf: 'flex-start' }}>Al corriente</span>}
           {cubiertoPorSaldo && <span className="badge win" style={{ alignSelf: 'flex-start' }}>Cubierto por saldo</span>}
           {!alCorriente && !cubiertoPorSaldo && jugPend > 0 && (
             <strong style={{ fontSize: '.88rem', color: 'var(--red)' }}>
@@ -869,7 +1111,6 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
             </strong>
           )}
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', flexShrink: 0 }}>
           {puedeAplicarSaldo && (
             <button className="btn" style={{ fontSize: '.8rem' }} onClick={aplicarSaldo}>
@@ -881,7 +1122,6 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
           </button>
         </div>
       </div>
-
       {open && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', alignItems: 'center', marginTop: '.8rem', paddingTop: '.8rem', borderTop: '1px solid var(--border)' }}>
           <input type="number" min={1}
@@ -891,8 +1131,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
           <button className="btn" style={{ fontSize: '.8rem' }} onClick={confirmar_}>Confirmar</button>
           <button className="btn secondary" style={{ fontSize: '.8rem' }} onClick={() => setOpen(false)}>Cancelar</button>
           <p className="muted" style={{ fontSize: '.74rem', marginTop: '.3rem', width: '100%' }}>
-            El sobrante queda como saldo a favor de <strong>{eq.nombre}</strong> y cubre sus proximos partidos.
-            No afecta el saldo de otros equipos.
+            El sobrante queda como saldo a favor de <strong>{eq.nombre}</strong>.
           </p>
         </div>
       )}
@@ -900,6 +1139,9 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB COMENTARIOS
+// ════════════════════════════════════════════════════════════
 export function TabComentarios({ liga }) {
   const [comentarios, setComentarios] = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -914,7 +1156,7 @@ export function TabComentarios({ liga }) {
   useEffect(() => { cargar(); }, [liga.id]);
 
   const eliminar = async id => {
-    if (!window.confirm('Eliminar este comentario?')) return;
+    if (!window.confirm('¿Eliminar este comentario?')) return;
     try {
       await eliminarComentario(id);
       setComentarios(prev => prev.filter(c => c.id !== id));
@@ -933,11 +1175,11 @@ export function TabComentarios({ liga }) {
       </div>
       {!permitido && (
         <div className="auth-error" style={{ marginBottom: '1rem' }}>
-          Los comentarios estan deshabilitados. Puedes activarlos desde Config.
+          Los comentarios están deshabilitados. Puedes activarlos desde Config.
         </div>
       )}
       <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1.2rem' }}>
-        Quejas y sugerencias enviadas desde la vista publica.
+        Quejas y sugerencias enviadas desde la vista pública.
         {permitido ? ' Elimina los que ya revisaste.' : ''}
       </p>
       {loading && <div className="loading-spinner" style={{ margin: '2rem auto' }} />}
@@ -959,9 +1201,9 @@ export function TabComentarios({ liga }) {
                     </div>
                     <button className="btn danger small" onClick={() => eliminar(c.id)} style={{ flexShrink: 0 }}>🗑</button>
                   </div>
-                  {c.equipo && <p style={{ fontSize: '.78rem', color: 'var(--accent)', marginBottom: '.3rem' }}>Equipo: {c.equipo}</p>}
-                  {c.descripcion && <p style={{ fontSize: '.83rem', margin: '0 0 .25rem', color: 'var(--muted)' }}><strong>Descripcion:</strong> {c.descripcion}</p>}
-                  {c.mensaje && <p style={{ fontSize: '.83rem', margin: 0, lineHeight: 1.5 }}>{c.mensaje}</p>}
+                  {c.equipo      && <p style={{ fontSize: '.78rem', color: 'var(--accent)', marginBottom: '.3rem' }}>Equipo: {c.equipo}</p>}
+                  {c.descripcion && <p style={{ fontSize: '.83rem', margin: '0 0 .25rem', color: 'var(--muted)' }}><strong>Descripción:</strong> {c.descripcion}</p>}
+                  {c.mensaje     && <p style={{ fontSize: '.83rem', margin: 0, lineHeight: 1.5 }}>{c.mensaje}</p>}
                 </div>
               ))
             }
@@ -993,7 +1235,12 @@ export function TabComentarios({ liga }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+//  TAB CONFIG
+// ════════════════════════════════════════════════════════════
 export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva }) {
+  const { puedeAlias, puedeCoAdmins } = useAuth();
+
   const cfg0 = {
     nombre: liga.nombre || '', temporada: liga.temporada || '',
     vueltas: 2, usarPuntos: true, usarSets: true,
@@ -1002,8 +1249,8 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
     permitirAdelantoArb: true, permitirComentarios: true,
     ...(liga.config || {}),
   };
-  const [cfg, setCfg]           = useState(cfg0);
-  const [alias, setAlias]       = useState(liga.alias || '');
+  const [cfg,      setCfg]      = useState(cfg0);
+  const [alias,    setAlias]    = useState(liga.alias || '');
   const [aliasMsg, setAliasMsg] = useState({ ok: '', err: '' });
   const [miembros, setMiembros] = useState([]);
   const [invEmail, setInvEmail] = useState('');
@@ -1014,7 +1261,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
     e.preventDefault();
     await actualizarLiga(liga.id, { nombre: cfg.nombre, temporada: cfg.temporada, config: cfg });
     updateLiga({ nombre: cfg.nombre, temporada: cfg.temporada, config: cfg });
-    toast('Configuracion guardada');
+    toast('Configuración guardada');
   };
 
   const guardarFormato = async () => {
@@ -1039,9 +1286,9 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   };
 
   const renovarCodigo_ = async () => {
-    if (!window.confirm('Renovar el codigo? El anterior dejara de funcionar.')) return;
+    if (!window.confirm('¿Renovar el código? El anterior dejará de funcionar.')) return;
     const nuevo = await renovarCodigo(liga.id);
-    updateLiga({ codigo: nuevo }); refresh(); toast('Codigo renovado');
+    updateLiga({ codigo: nuevo }); refresh(); toast('Código renovado');
   };
 
   const copiarLink = () => {
@@ -1060,7 +1307,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   };
 
   const quitar = async miembro => {
-    if (!window.confirm('Quitar este co-admin?')) return;
+    if (!window.confirm('¿Quitar este co-admin?')) return;
     await quitarMiembro(liga.id, miembro.user_id);
     setMiembros(prev => prev.filter(x => x.id !== miembro.id));
     toast('Co-admin eliminado');
@@ -1068,18 +1315,22 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
 
   return (
     <>
-      <h2>⚙ <span>Configuracion</span></h2>
+      <h2>⚙ <span>Configuración</span></h2>
+
+      {/* Básico */}
       <div className="card">
         <p className="card-subtitle">Liga</p>
         <form onSubmit={guardarBasico}>
           <div className="form-row">
             <div className="form-group" style={{ flex: 3 }}>
               <label>Nombre</label>
-              <input type="text" maxLength={60} required value={cfg.nombre} onChange={e => setCfg(c => ({ ...c, nombre: e.target.value }))} />
+              <input type="text" maxLength={60} required value={cfg.nombre}
+                onChange={e => setCfg(c => ({ ...c, nombre: e.target.value }))} />
             </div>
             <div className="form-group" style={{ flex: 2 }}>
               <label>Temporada</label>
-              <input type="text" maxLength={20} value={cfg.temporada} onChange={e => setCfg(c => ({ ...c, temporada: e.target.value }))} />
+              <input type="text" maxLength={20} value={cfg.temporada}
+                onChange={e => setCfg(c => ({ ...c, temporada: e.target.value }))} />
             </div>
             <div className="form-group">
               <label>Vueltas</label>
@@ -1090,7 +1341,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Precio inscripcion ($)</label>
+              <label>Precio inscripción ($)</label>
               <input type="number" min={0} style={{ maxWidth: 100 }} value={cfg.precioInscripcion}
                 onChange={e => setCfg(c => ({ ...c, precioInscripcion: parseInt(e.target.value) || 500 }))} />
             </div>
@@ -1108,20 +1359,23 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
           <label className="check-row cfg-toggle-row">
             <input type="checkbox" checked={cfg.permitirComentarios !== false}
               onChange={e => setCfg(c => ({ ...c, permitirComentarios: e.target.checked }))} />
-            <span><strong>Habilitar quejas y sugerencias</strong><small>Permite comentarios desde la vista publica.</small></span>
+            <span><strong>Habilitar quejas y sugerencias</strong><small>Permite comentarios desde la vista pública.</small></span>
           </label>
           <div className="flex mt1"><button type="submit" className="btn">Guardar</button></div>
         </form>
       </div>
 
+      {/* Formato */}
       <div className="card">
         <p className="card-subtitle">Formato del partido</p>
         <label className="check-row cfg-toggle-row">
-          <input type="checkbox" checked={cfg.usarSets} onChange={e => setCfg(c => ({ ...c, usarSets: e.target.checked }))} />
+          <input type="checkbox" checked={cfg.usarSets}
+            onChange={e => setCfg(c => ({ ...c, usarSets: e.target.checked }))} />
           <span><strong>Registrar sets</strong><small>Desactiva para solo registrar ganador/perdedor.</small></span>
         </label>
         <label className="check-row cfg-toggle-row">
-          <input type="checkbox" checked={cfg.usarPuntos} onChange={e => setCfg(c => ({ ...c, usarPuntos: e.target.checked }))} />
+          <input type="checkbox" checked={cfg.usarPuntos}
+            onChange={e => setCfg(c => ({ ...c, usarPuntos: e.target.checked }))} />
           <span><strong>Columna de puntos (PTS)</strong></span>
         </label>
         <div className="form-row" style={{ marginTop: '.8rem' }}>
@@ -1144,26 +1398,44 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
         <div className="flex mt1"><button className="btn" onClick={guardarFormato}>Guardar formato</button></div>
       </div>
 
+      {/* Acceso público */}
       <div className="card">
-        <p className="card-subtitle">Acceso publico</p>
-        <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>Comparte el link para que cualquiera vea tu liga sin iniciar sesion.</p>
-        <div style={{ marginBottom: '1.2rem' }}>
-          <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>Nombre corto personalizado</label>
-          <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input type="text" placeholder="ej: lachona" maxLength={20}
-              style={{ maxWidth: 200, fontSize: '.95rem' }} value={alias}
-              onChange={e => setAlias(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
-            <button className="btn" onClick={guardarAlias_}>Guardar alias</button>
+        <p className="card-subtitle">Acceso público</p>
+        <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>
+          Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
+        </p>
+
+        {/* Alias — solo si el plan lo permite */}
+        {puedeAlias ? (
+          <div style={{ marginBottom: '1.2rem' }}>
+            <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>
+              Nombre corto personalizado
+            </label>
+            <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input type="text" placeholder="ej: lachona" maxLength={20}
+                style={{ maxWidth: 200, fontSize: '.95rem' }} value={alias}
+                onChange={e => setAlias(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
+              <button className="btn" onClick={guardarAlias_}>Guardar alias</button>
+            </div>
+            <p className="muted" style={{ fontSize: '.75rem', marginTop: '.4rem' }}>
+              Solo minúsculas, números y guiones. Min 3 caracteres.<br />
+              {liga.alias ? 'Link: ' + location.origin + '/?liga=' + liga.alias : 'Sin alias aún.'}
+            </p>
+            {aliasMsg.err && <div className="auth-error" style={{ marginTop: '.4rem' }}>{aliasMsg.err}</div>}
+            {aliasMsg.ok  && <div style={{ color: 'var(--green)', fontSize: '.82rem', marginTop: '.4rem' }}>{aliasMsg.ok}</div>}
           </div>
-          <p className="muted" style={{ fontSize: '.75rem', marginTop: '.4rem' }}>
-            Solo minusculas, numeros y guiones. Min 3 caracteres.<br />
-            {liga.alias ? 'Link: ' + location.origin + '/?liga=' + liga.alias : 'Sin alias aun.'}
-          </p>
-          {aliasMsg.err && <div className="auth-error" style={{ marginTop: '.4rem' }}>{aliasMsg.err}</div>}
-          {aliasMsg.ok  && <div style={{ color: 'var(--green)', fontSize: '.82rem', marginTop: '.4rem' }}>{aliasMsg.ok}</div>}
-        </div>
+        ) : (
+          <div style={{ marginBottom: '1.2rem', padding: '.75rem', background: 'var(--bg2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+            <p style={{ fontSize: '.82rem', color: 'var(--muted)' }}>
+              🔒 El alias personalizado está disponible en el <strong>Plan Top</strong>.
+            </p>
+          </div>
+        )}
+
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-          <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.6rem' }}>Codigo de respaldo</label>
+          <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.6rem' }}>
+            Código de respaldo
+          </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <code className="codigo-chip" style={{ fontSize: '1.3rem', padding: '.4rem 1rem' }}>{liga.codigo}</code>
             <button className="btn secondary" onClick={renovarCodigo_}>Renovar</button>
@@ -1172,30 +1444,45 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
         </div>
       </div>
 
+      {/* Co-admins — solo si el plan lo permite */}
       <div className="card">
         <p className="card-subtitle">Co-administradores</p>
-        {miembros.map(m => (
-          <div key={m.id} className="fixture-item">
-            <span style={{ flex: 1 }}>{m.profiles?.nombre || m.profiles?.email || '—'}</span>
-            <span className={'badge ' + (m.role === 'owner' ? 'win' : 'pending')}>
-              {m.role === 'owner' ? 'Propietario' : 'Co-admin'}
-            </span>
-            {m.role !== 'owner' && <button className="btn danger small" onClick={() => quitar(m)}>Quitar</button>}
-          </div>
-        ))}
-        <div className="form-row" style={{ marginTop: '1rem' }}>
-          <input type="email" placeholder="correo@ejemplo.com" style={{ flex: 1 }}
-            value={invEmail} onChange={e => setInvEmail(e.target.value)} />
-          <button className="btn" onClick={invitar}>Invitar</button>
-        </div>
+        {!puedeCoAdmins ? (
+          <p style={{ fontSize: '.85rem', color: 'var(--muted)', padding: '.5rem 0' }}>
+            🔒 Los co-administradores están disponibles en el <strong>Plan Top</strong>.
+          </p>
+        ) : (
+          <>
+            {miembros.map(m => (
+              <div key={m.id} className="fixture-item">
+                <span style={{ flex: 1 }}>{m.profiles?.nombre || m.profiles?.email || '—'}</span>
+                <span className={'badge ' + (m.role === 'owner' ? 'win' : 'pending')}>
+                  {m.role === 'owner' ? 'Propietario' : 'Co-admin'}
+                </span>
+                {m.role !== 'owner' && (
+                  <button className="btn danger small" onClick={() => quitar(m)}>Quitar</button>
+                )}
+              </div>
+            ))}
+            <div className="form-row" style={{ marginTop: '1rem' }}>
+              <input type="email" placeholder="correo@ejemplo.com" style={{ flex: 1 }}
+                value={invEmail} onChange={e => setInvEmail(e.target.value)} />
+              <button className="btn" onClick={invitar}>Invitar</button>
+            </div>
+          </>
+        )}
       </div>
 
+      {/* Notificaciones */}
       <div className="card">
         <p className="card-subtitle">Notificaciones</p>
-        <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.8rem' }}>Recibe un aviso cada vez que se registre un partido.</p>
+        <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.8rem' }}>
+          Recibe un aviso cada vez que se registre un partido.
+        </p>
         <PushToggle />
       </div>
 
+      {/* Zona de peligro */}
       <div className="card" style={{ borderColor: 'rgba(244,63,94,.25)', marginTop: '1rem' }}>
         <p className="card-subtitle" style={{ color: 'var(--red)' }}>Zona de peligro</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.8rem' }}>
@@ -1203,7 +1490,9 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
             <div className="danger-row">
               <div>
                 <strong style={{ fontSize: '.9rem' }}>Crear nueva liga</strong>
-                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>Crea otra liga en tu cuenta (maximo 2).</p>
+                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>
+                  Crea otra liga en tu cuenta.
+                </p>
               </div>
               <button className="btn secondary small" onClick={onCrearNueva}>+ Nueva liga</button>
             </div>
@@ -1212,7 +1501,9 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
             <div className="danger-row">
               <div>
                 <strong style={{ fontSize: '.9rem' }}>Eliminar liga</strong>
-                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>Elimina esta liga y todos sus datos permanentemente.</p>
+                <p className="muted" style={{ fontSize: '.78rem', marginTop: '.1rem' }}>
+                  Elimina esta liga y todos sus datos permanentemente.
+                </p>
               </div>
               <button className="btn danger small" onClick={onEliminar}>Eliminar liga</button>
             </div>
@@ -1223,35 +1514,9 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   );
 }
 
-function TabUpgrade() {
-  const [mostrarPago, setMostrarPago] = useState(false);
-  return (
-    <>
-      {mostrarPago && <ModalPago onCerrar={() => setMostrarPago(false)} />}
-      <div className="empty-state" style={{ maxWidth: 480 }}>
-        <div className="empty-icon">🔒</div>
-        <h2>Funcion <span>Pro</span></h2>
-        <p className="muted" style={{ marginBottom: '1.5rem' }}>Esta funcion esta disponible en el Plan Pro.</p>
-        <div className="card" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
-          <p className="card-subtitle">Plan Pro incluye</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', fontSize: '.9rem' }}>
-            <span>Ligas ilimitadas</span>
-            <span>Equipos ilimitados por liga</span>
-            <span>Bracket de playoffs completo</span>
-            <span>Modulo de finanzas</span>
-            <span>Alias personalizado de liga</span>
-            <span>Co-administradores</span>
-          </div>
-        </div>
-        <button className="btn" style={{ width: '100%', padding: '.8rem', fontSize: '1rem' }} onClick={() => setMostrarPago(true)}>
-          Obtener Plan Pro
-        </button>
-        <p className="muted" style={{ fontSize: '.78rem', marginTop: '.8rem' }}>Desde $99 MXN/mes · Pago seguro con MercadoPago</p>
-      </div>
-    </>
-  );
-}
-
+// ════════════════════════════════════════════════════════════
+//  HELPERS INTERNOS
+// ════════════════════════════════════════════════════════════
 function generarFixture(noms) {
   const enc = [];
   for (let i = 0; i < noms.length; i++)
@@ -1261,7 +1526,7 @@ function generarFixture(noms) {
 }
 
 function calcularTabla(equipos, partidos, cfg) {
-  if (!Array.isArray(equipos)) equipos = [];
+  if (!Array.isArray(equipos))  equipos  = [];
   if (!Array.isArray(partidos)) partidos = [];
   const usarPts  = cfg.usarPuntos !== false;
   const usarSets = cfg.usarSets   !== false;
@@ -1301,7 +1566,8 @@ function leerSets(sets, reglas) {
     const r = reglas[i] || reglas[reglas.length - 1];
     if (r.usarPuntosSet !== false) {
       const max = Math.max(pA, pB), min = Math.min(pA, pB);
-      if (max < r.puntos || (max - min) < r.diferencia) return { ok: false, msg: 'Set ' + (i + 1) + ' invalido: ' + pA + '-' + pB };
+      if (max < r.puntos || (max - min) < r.diferencia)
+        return { ok: false, msg: 'Set ' + (i + 1) + ' inválido: ' + pA + '-' + pB };
     } else {
       if (pA === pB) return { ok: false, msg: 'Set ' + (i + 1) + ': debe haber un ganador' };
     }
@@ -1309,6 +1575,6 @@ function leerSets(sets, reglas) {
     if (pA > pB) sA++; else sB++;
   }
   const ganador = sA >= setsParaGanar ? 'A' : sB >= setsParaGanar ? 'B' : null;
-  if (!ganador) return { ok: false, msg: 'No hay ganador aun. Completa mas sets.' };
+  if (!ganador) return { ok: false, msg: 'No hay ganador aún. Completa más sets.' };
   return { ok: true, sets: result, sA, sB, ganador };
 }
