@@ -71,15 +71,14 @@ function OrgPanelApp({ profile }) {
   const irACrear = useCallback(() => setScreen('crear'), []);
 
   const volverASelector = useCallback(() => {
-    localStorage.removeItem('ligaActualId');
-    setLigaActual(null);
-    getMisLigas(currentProfile.id).then(ligas => {
-      setMisLigas(ligas);
-      if (ligas.length === 0) setScreen('sinligas');
-      else if (ligas.length === 1) { setLigaActual(ligas[0]); setScreen('liga'); }
-      else setScreen('selector');
-    });
-  }, [currentProfile]);
+  localStorage.removeItem('ligaActualId');
+  setLigaActual(null);
+  getMisLigas(currentProfile.id).then(ligas => {
+    setMisLigas(ligas);
+    if (ligas.length === 0) setScreen('sinligas');
+    else setScreen('selector'); 
+  });
+}, [currentProfile]);
 
   const ligaNombre = ligaActual?.nombre || 'Mis ligas';
 
@@ -188,12 +187,25 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
   const [mostrarPago, setMostrarPago] = useState(false);
 
   useEffect(() => {
-    contarLigasDeUsuario(perfil.id).then(n => {
-      setConteo(n);
-      setLimite(n >= maxLigasPermitidas);
-      setLoading(false);
-    });
-  }, [perfil.id, maxLigasPermitidas]);
+  if (!currentProfile) return;
+  getMisLigas(currentProfile.id).then(ligas => {
+    setMisLigas(ligas);
+    const planObj = getPlan(currentProfile);
+    const savedId = localStorage.getItem('ligaActualId');
+    if (savedId) {
+      const saved = ligas.find(l => l.id === savedId);
+      if (saved) { setLigaActual(saved); setScreen('liga'); return; }
+    }
+    if (ligas.length === 0)                        setScreen('sinligas');
+    else if (ligas.length === 1 && planObj.maxLigas === 1) {
+      // Solo si el plan no permite más, saltar directo a la liga
+      setLigaActual(ligas[0]); setScreen('liga');
+    } else {
+      // Tiene más de 1 liga, o el plan permite más → mostrar selector
+      setScreen('selector');
+    }
+  });
+}, [currentProfile]);
 
   const enviar = async e => {
     e.preventDefault();
