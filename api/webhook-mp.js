@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const sb = createClient(
   process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY  // necesitamos service key aquí (no anon key)
+  process.env.SUPABASE_SERVICE_KEY
 );
 
 export default async function handler(req, res) {
@@ -13,17 +13,13 @@ export default async function handler(req, res) {
 
   const { type, data } = req.body;
 
-  // Solo nos interesan los pagos aprobados
   if (type !== 'payment') {
     return res.status(200).json({ ok: true });
   }
 
   try {
-    // Obtener detalles del pago desde MP
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.MP_ACCESS_TOKEN}`,
-      },
+      headers: { 'Authorization': `Bearer ${process.env.MP_ACCESS_TOKEN}` },
     });
     const pago = await mpRes.json();
 
@@ -31,30 +27,75 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, status: pago.status });
     }
 
-    // external_reference = "userId|mensual" o "userId|temporada"
-    const [userId, tipoPlan] = (pago.external_reference || '').split('|');
+    // external_reference = "userId|plan|tipo"
+    // Ejemplos:
+    //   "abc123|medio|mensual"
+    //   "abc123|top|temporada"
+    //   "abc123|basico|addon_unico"
+    //   "abc123|basico|addon_temporada"
+    // Retro-compatibilidad: "abc123|mensual" (2 partes, formato antiguo)
+    const partes = (pago.external_reference || '').split('|');
+    if (partes.length < 2) {
+      return res.status(400).json({ error: 'Referencia externa inválida' });
+    }
+
+    const userId = partes[0];
+    const plan   = partes[1]; // 'medio' | 'top' | 'basico' | (legacy) 'mensual' | 'temporada'
+    const tipo   = partes[2]; // 'mensual' | 'temporada' | 'addon_unico' | 'addon_temporada'
+
     if (!userId) {
-      return res.status(400).json({ error: 'Sin referencia de usuario' });
+      return res.status(400).json({ error: 'Sin userId en referencia' });
     }
 
-    // Calcular fecha de expiración
-    const ahora      = new Date();
-    const esTemporada = tipoPlan === 'temporada';
-    const expira     = new Date(ahora);
-    if (esTemporada) {
-      expira.setMonth(expira.getMonth() + 6);
+    const ahora   = new Date();
+    const expira  = new Date(ahora);
+
+    // ── Determinar el plan y la expiración ────────────────────────────────
+    let planFinal  = 'basico';
+    let expiraISO  = null;
+    let addonUpdate = null;
+
+    // Retro-compatibilidad: formato antiguo (2 partes)
+    if (!tipo && (plan === 'mensual' || plan === 'temporada')) {
+      planFinal = 'medio';
+      if (plan === 'mensual')    expira.setMonth(expira.getMonth() + 1);
+      if (plan === 'temporada')  expira.setMonth(expira.getMonth() + 6);
+      expiraISO = expira.toISOString();
+    }
+    // Add-ons (plan básico, solo activan vista pública)
+    else if (plan === 'basico' && tipo === 'addon_unico') {
+      // Sin cambio de plan — solo marcamos el add-on como activo de por vida
+      addonUpdate = { addon_vista_publica: true, addon_vp_expira: null };
+    }
+    else if (plan === 'basico' && tipo === 'addon_temporada') {
+      const expiraAddon = new Date(ahora);
+      expiraAddon.setMonth(expiraAddon.getMonth() + 6);
+      addonUpdate = { addon_vista_publica: true, addon_vp_expira: expiraAddon.toISOString() };
+    }
+    // Planes de pago
+    else if (plan === 'medio' || plan === 'top') {
+      planFinal = plan;
+      if (tipo === 'mensual')   expira.setMonth(expira.getMonth() + 1);
+      if (tipo === 'temporada') expira.setMonth(expira.getMonth() + 6);
+      expiraISO = expira.toISOString();
+    }
+
+    // ── Construir el update de Supabase ───────────────────────────────────
+    const updateFields = {
+      plan_origen: 'mercadopago',
+    };
+
+    if (addonUpdate) {
+      // Solo actualizar add-on, no tocar el plan principal
+      Object.assign(updateFields, addonUpdate);
     } else {
-      expira.setMonth(expira.getMonth() + 1);
+      updateFields.plan        = planFinal;
+      updateFields.plan_expira = expiraISO;
     }
 
-    // Actualizar plan en Supabase
     const { error } = await sb
       .from('profiles')
-      .update({
-        plan:         'pro',
-        plan_expira:  expira.toISOString(),
-        plan_origen:  'mercadopago',
-      })
+      .update(updateFields)
       .eq('id', userId);
 
     if (error) {
@@ -62,7 +103,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: error.message });
     }
 
-    console.log(`✓ Plan Pro activado para usuario ${userId} hasta ${expira.toISOString()}`);
+    console.log(`✓ Plan actualizado para ${userId}: plan=${planFinal || 'addon'} tipo=${tipo} expira=${expiraISO}`);
     return res.status(200).json({ ok: true });
 
   } catch (err) {
