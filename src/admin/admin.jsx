@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
 import {
   getTodosUsuarios, cambiarRol, desactivarUsuario, activarUsuario,
-  getTodasLigas, actualizarLiga, getPeticiones, responderPeticion,
+  getTodasLigas, actualizarLiga,
   getMetricas, getMisLigas, crearLiga,
   getLigaById, getEquipos, getPartidos,
   actualizarPerfil,
@@ -42,7 +42,6 @@ const SECCIONES = [
   { id: 'metricas',   label: '📊 Métricas'   },
   { id: 'ligas',      label: '🏆 Ligas'       },
   { id: 'usuarios',   label: '👤 Usuarios'    },
-  { id: 'peticiones', label: '📋 Peticiones'  },
   { id: 'miliga',     label: '🧪 Mi liga'     },
 ];
 
@@ -81,7 +80,6 @@ function AdminPanelApp({ profile }) {
         {seccion === 'metricas'   && <SeccionMetricas />}
         {seccion === 'ligas'      && <SeccionLigas />}
         {seccion === 'usuarios'   && <SeccionUsuarios profile={profile} />}
-        {seccion === 'peticiones' && <SeccionPeticiones />}
         {seccion === 'miliga'     && <SeccionMiLiga profile={profile} />}
       </main>
     </div>
