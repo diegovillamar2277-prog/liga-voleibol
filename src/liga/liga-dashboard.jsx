@@ -47,14 +47,21 @@ function OrgPanelApp({ profile }) {
     if (!currentProfile) return;
     getMisLigas(currentProfile.id).then(ligas => {
       setMisLigas(ligas);
-      const savedId = localStorage.getItem('ligaActualId');
+      const planObj  = getPlan(currentProfile);
+      const savedId  = localStorage.getItem('ligaActualId');
       if (savedId) {
         const saved = ligas.find(l => l.id === savedId);
         if (saved) { setLigaActual(saved); setScreen('liga'); return; }
       }
-      if (ligas.length === 0)      setScreen('sinligas');
-      else if (ligas.length === 1) { setLigaActual(ligas[0]); setScreen('liga'); }
-      else                         setScreen('selector');
+      if (ligas.length === 0) {
+        setScreen('sinligas');
+      } else if (ligas.length === 1 && planObj.maxLigas === 1) {
+        // Plan básico con 1 liga → ir directo (no puede crear más)
+        setLigaActual(ligas[0]); setScreen('liga');
+      } else {
+        // Tiene 2+ ligas, O el plan permite más → mostrar selector siempre
+        setScreen('selector');
+      }
     });
   }, [currentProfile]);
 
@@ -71,31 +78,51 @@ function OrgPanelApp({ profile }) {
   const irACrear = useCallback(() => setScreen('crear'), []);
 
   const volverASelector = useCallback(() => {
-  localStorage.removeItem('ligaActualId');
-  setLigaActual(null);
-  getMisLigas(currentProfile.id).then(ligas => {
-    setMisLigas(ligas);
-    if (ligas.length === 0) setScreen('sinligas');
-    else setScreen('selector'); 
-  });
-}, [currentProfile]);
+    localStorage.removeItem('ligaActualId');
+    setLigaActual(null);
+    getMisLigas(currentProfile.id).then(ligas => {
+      setMisLigas(ligas);
+      if (ligas.length === 0) setScreen('sinligas');
+      else setScreen('selector'); // siempre selector, nunca saltar directo
+    });
+  }, [currentProfile]);
 
   const ligaNombre = ligaActual?.nombre || 'Mis ligas';
+  const planObj = getPlan(currentProfile);
+  const mostrarNuevaLiga = screen === 'liga' && planObj.maxLigas > 1;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
           <span className="topbar-logo">🏐</span>
-          <span
-            className="topbar-title"
-            style={{ cursor: ligaActual ? 'pointer' : 'default' }}
-            onClick={ligaActual ? volverASelector : undefined}
-          >
-            {ligaNombre}
-          </span>
+          {ligaActual ? (
+            <button
+              className="btn secondary small"
+              style={{ gap: '.3rem', fontSize: '.8rem' }}
+              onClick={volverASelector}
+            >
+              ← Mis ligas
+            </button>
+          ) : (
+            <span className="topbar-title">{ligaNombre}</span>
+          )}
+          {ligaActual && (
+            <span className="topbar-title" style={{ cursor: 'default' }}>
+              {ligaNombre}
+            </span>
+          )}
         </div>
         <div className="topbar-right">
+          {mostrarNuevaLiga && (
+            <button
+              className="btn small"
+              style={{ fontSize: '.78rem' }}
+              onClick={irACrear}
+            >
+              + Nueva liga
+            </button>
+          )}
           <span className="topbar-user">{currentProfile?.nombre || currentProfile?.email}</span>
           <button className="btn secondary small" onClick={handleLogout}>Salir</button>
         </div>
@@ -187,25 +214,12 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
   const [mostrarPago, setMostrarPago] = useState(false);
 
   useEffect(() => {
-  if (!currentProfile) return;
-  getMisLigas(currentProfile.id).then(ligas => {
-    setMisLigas(ligas);
-    const planObj = getPlan(currentProfile);
-    const savedId = localStorage.getItem('ligaActualId');
-    if (savedId) {
-      const saved = ligas.find(l => l.id === savedId);
-      if (saved) { setLigaActual(saved); setScreen('liga'); return; }
-    }
-    if (ligas.length === 0)                        setScreen('sinligas');
-    else if (ligas.length === 1 && planObj.maxLigas === 1) {
-      // Solo si el plan no permite más, saltar directo a la liga
-      setLigaActual(ligas[0]); setScreen('liga');
-    } else {
-      // Tiene más de 1 liga, o el plan permite más → mostrar selector
-      setScreen('selector');
-    }
-  });
-}, [currentProfile]);
+    contarLigasDeUsuario(perfil.id).then(n => {
+      setConteo(n);
+      setLimite(n >= maxLigasPermitidas);
+      setLoading(false);
+    });
+  }, [perfil.id, maxLigasPermitidas]);
 
   const enviar = async e => {
     e.preventDefault();
