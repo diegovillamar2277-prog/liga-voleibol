@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { sb } from '../lib/supabase.js';
-import { getPlan, PLANES } from '../lib/planes.js';
+import { getPlan, isPro, getPlanId, tieneFeature, tieneVistaPublica, maxLigas, PLANES } from '../lib/planes.js';
 
 // ── Error translation (Spanish messages) ────────────────────
 function traducirError(msg) {
@@ -28,14 +28,13 @@ export const AuthContext = createContext(null);
 
 // ── Provider ─────────────────────────────────────────────────
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser]       = useState(null);
+  const [currentUser,    setCurrentUser]    = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
-  const [loading, setLoading]               = useState(true);
+  const [loading,        setLoading]        = useState(true);
 
   useEffect(() => {
     let subscription;
 
-    // Restore existing session on mount
     (async () => {
       try {
         const { data: { session } } = await sb.auth.getSession();
@@ -52,7 +51,6 @@ export function AuthProvider({ children }) {
       }
     })();
 
-    // Subscribe to auth state changes
     const { data } = sb.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setCurrentUser(session.user);
@@ -68,9 +66,7 @@ export function AuthProvider({ children }) {
     });
     subscription = data.subscription;
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => { subscription?.unsubscribe(); };
   }, []);
 
   // ── Auth actions ─────────────────────────────────────────
@@ -96,8 +92,22 @@ export function AuthProvider({ children }) {
   const isLoggedIn   = !!currentUser;
   const isAdmin      = ['superadmin', 'admin'].includes(currentProfile?.role);
   const isSuperAdmin = currentProfile?.role === 'superadmin';
-  const plan         = getPlan(currentProfile);
-  const isPro        = plan === PLANES.pro;
+
+  // Plan actual (objeto completo de PLANES)
+  const planObj  = getPlan(currentProfile);
+  const planId   = planObj.id; // 'basico' | 'medio' | 'top'
+
+  // Retro-compatibilidad: isPro = medio o top
+  const isProVal = isPro(currentProfile);
+
+  // Helpers de feature
+  const puedeVerPublico  = tieneVistaPublica(currentProfile);
+  const puedePlayoffs    = planObj.playoffs;
+  const puedeFinanzas    = planObj.finanzas;
+  const puedeAlias       = planObj.alias;
+  const puedeCoAdmins    = planObj.coAdmins;
+  const puedeComentarios = planObj.comentarios;
+  const maxLigasPermitidas = maxLigas(currentProfile);
 
   const value = {
     currentUser,
@@ -105,12 +115,25 @@ export function AuthProvider({ children }) {
     isLoggedIn,
     isAdmin,
     isSuperAdmin,
-    isPro,
-    plan,
     loading,
     login,
     logout,
     register,
+
+    // Plan
+    plan:          planId,       // 'basico' | 'medio' | 'top'
+    planObj,                     // objeto completo con todos los flags
+    isPro:         isProVal,     // retro-compatibilidad: true si medio o top
+    PLANES,                      // exponer constante por si se necesita comparar
+
+    // Feature flags directos
+    puedeVerPublico,
+    puedePlayoffs,
+    puedeFinanzas,
+    puedeAlias,
+    puedeCoAdmins,
+    puedeComentarios,
+    maxLigasPermitidas,
   };
 
   return (
