@@ -17,7 +17,7 @@ import { TabTabla, TabFixture, TabPartidos, TabEquipos, TabFinanzas, TabConfig, 
 import { toast, formatFecha } from '../lib/ui.js';
 import PushToggle from '../components/PushToggle.jsx';
 
-// ── Punto de entrada (llamado desde main.js) ─────────────────
+// ── Punto de entrada ─────────────────────────────────────────
 let _root = null;
 let _container = null;
 
@@ -26,13 +26,8 @@ export function unmountAdminPanel() {
 }
 
 export function renderAdminPanel(container, profile) {
-  if (_root && _container !== container) {
-    _root.unmount(); _root = null;
-  }
-  if (!_root) {
-    _root = createRoot(container);
-    _container = container;
-  }
+  if (_root && _container !== container) { _root.unmount(); _root = null; }
+  if (!_root) { _root = createRoot(container); _container = container; }
   _root.render(
     <AuthProvider>
       <AdminPanelApp profile={profile} />
@@ -54,9 +49,7 @@ const SECCIONES = [
 function AdminPanelApp({ profile }) {
   const [seccion, setSeccion] = useState('metricas');
 
-  const handleLogout = async () => {
-    await sb.auth.signOut();
-  };
+  const handleLogout = async () => { await sb.auth.signOut(); };
 
   return (
     <div className="app-shell">
@@ -99,13 +92,11 @@ function AdminPanelApp({ profile }) {
 //  SECCIÓN: MÉTRICAS
 // ════════════════════════════════════════════════════════════
 function SeccionMetricas() {
-  const [data, setData]   = useState(null);
+  const [data,  setData]  = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    getMetricas()
-      .then(setData)
-      .catch(() => setError(true));
+    getMetricas().then(setData).catch(() => setError(true));
   }, []);
 
   if (error) return <p className="empty">Error al cargar métricas.</p>;
@@ -252,15 +243,33 @@ function SeccionUsuarios({ profile }) {
     } catch (err) { toast(err.message, 'error'); }
   };
 
-  const togglePlan = async (uid, planActual) => {
+  // Cicla: basico → medio (6 meses) → top (6 meses) → basico
+  const ciclarPlan = async (uid, planActual) => {
     try {
-      const nuevoPlan = planActual === 'pro' ? 'free' : 'pro';
+      let nuevoPlan, expira;
+      const p = planActual || 'basico';
+      if (p === 'basico' || p === 'free' || !p) {
+        nuevoPlan = 'medio';
+        const d = new Date(); d.setMonth(d.getMonth() + 6);
+        expira = d.toISOString();
+      } else if (p === 'medio') {
+        nuevoPlan = 'top';
+        const d = new Date(); d.setMonth(d.getMonth() + 6);
+        expira = d.toISOString();
+      } else {
+        // top o pro (legacy) → basico
+        nuevoPlan = 'basico';
+        expira = null;
+      }
+
       await actualizarPerfil(uid, {
-        plan: nuevoPlan,
-        plan_expira: null,
+        plan:        nuevoPlan,
+        plan_expira: expira,
         plan_origen: 'manual',
       });
-      toast(nuevoPlan === 'pro' ? '⭐ Plan Pro activado' : 'Plan revertido a Free');
+
+      const emoji = { top: '🏆', medio: '⚡', basico: '🆓' }[nuevoPlan] || '🆓';
+      toast(`${emoji} Plan cambiado a ${nuevoPlan.charAt(0).toUpperCase() + nuevoPlan.slice(1)}`);
       cargar();
     } catch (err) { toast(err.message, 'error'); }
   };
@@ -275,6 +284,23 @@ function SeccionUsuarios({ profile }) {
 
   if (!usuarios) return <div className="loading-spinner" style={{ margin: '3rem auto' }} />;
 
+  const planBadge = (u) => {
+    const p = u.plan || 'basico';
+    if (p !== 'basico' && u.plan_expira && new Date(u.plan_expira) < new Date()) {
+      return { label: '🆓 Básico (expirado)', color: 'danger' };
+    }
+    if (p === 'top' || p === 'pro') return { label: '🏆 Top',   color: 'win'     };
+    if (p === 'medio')              return { label: '⚡ Medio', color: 'pending' };
+    return { label: '🆓 Básico', color: '' };
+  };
+
+  const planBtnLabel = (u) => {
+    const p = u.plan || 'basico';
+    if (!p || p === 'basico' || p === 'free') return '⚡ Activar Medio';
+    if (p === 'medio') return '🏆 Subir a Top';
+    return '🆓 Revocar plan';
+  };
+
   return (
     <>
       <div className="admin-section-header">
@@ -283,54 +309,72 @@ function SeccionUsuarios({ profile }) {
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
-            <tr><th>Nombre / Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr>
+            <tr>
+              <th>Nombre / Correo</th><th>Rol</th><th>Plan</th><th>Estado</th><th>Acciones</th>
+            </tr>
           </thead>
           <tbody>
-            {usuarios.map(u => (
-              <tr key={u.id}>
-                <td>
-                  <strong>{u.nombre || '—'}</strong><br />
-                  <small className="muted">{u.email}</small>
-                </td>
-                <td><span className={`badge-role ${u.role}`}>{rolLabel(u.role)}</span></td>
-                <td>
-                  <span className={`badge ${u.activo ? 'win' : 'danger'}`}>
-                    {u.activo ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td className="admin-acciones">
-                  {u.id === profile?.id
-                    ? <span className="muted">Tú</span>
-                    : <>
-                        {profile?.role === 'superadmin' && (
-                          <select
-                            className="select-rol small"
-                            value={u.role}
-                            onChange={e => handleRol(u.id, e.target.value)}
+            {usuarios.map(u => {
+              const badge = planBadge(u);
+              return (
+                <tr key={u.id}>
+                  <td>
+                    <strong>{u.nombre || '—'}</strong><br />
+                    <small className="muted">{u.email}</small>
+                  </td>
+                  <td>
+                    <span className={`badge-role ${u.role}`}>{rolLabel(u.role)}</span>
+                  </td>
+                  <td>
+                    <span className={`badge ${badge.color}`}>{badge.label}</span>
+                    {u.plan_expira && u.plan !== 'basico' && (
+                      <div style={{ fontSize: '.72rem', color: 'var(--muted)', marginTop: '.2rem' }}>
+                        Hasta {new Date(u.plan_expira).toLocaleDateString('es-MX')}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`badge ${u.activo ? 'win' : 'danger'}`}>
+                      {u.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </td>
+                  <td className="admin-acciones">
+                    {u.id === profile?.id
+                      ? <span className="muted">Tú</span>
+                      : <>
+                          {profile?.role === 'superadmin' && (
+                            <select
+                              className="select-rol small"
+                              value={u.role}
+                              onChange={e => handleRol(u.id, e.target.value)}
+                            >
+                              <option value="organizador">Organizador</option>
+                              <option value="admin">Admin</option>
+                              <option value="superadmin">Superadmin</option>
+                            </select>
+                          )}
+                          <button
+                            className={`btn ${u.activo ? 'danger' : 'secondary'} small`}
+                            onClick={() => toggleUser(u.id, !u.activo)}
                           >
-                            <option value="organizador">Organizador</option>
-                            <option value="admin">Admin</option>
-                            <option value="superadmin">Superadmin</option>
-                          </select>
-                        )}
-                        <button
-                          className={`btn ${u.activo ? 'danger' : 'secondary'} small`}
-                          onClick={() => toggleUser(u.id, !u.activo)}
-                        >
-                          {u.activo ? 'Desactivar' : 'Activar'}
-                        </button>
-                        <button
-                          className={`btn ${u.plan === 'pro' ? 'secondary' : ''} small`}
-                          style={{ borderColor: 'var(--accent)', color: u.plan === 'pro' ? 'var(--muted)' : 'var(--accent)' }}
-                          onClick={() => togglePlan(u.id, u.plan)}
-                        >
-                          {u.plan === 'pro' ? '⭐ Pro activo' : '🔓 Activar Pro'}
-                        </button>
-                      </>
-                  }
-                </td>
-              </tr>
-            ))}
+                            {u.activo ? 'Desactivar' : 'Activar'}
+                          </button>
+                          <button
+                            className="btn secondary small"
+                            style={{
+                              borderColor: (u.plan === 'top' || u.plan === 'pro') ? 'var(--red)' : 'var(--accent)',
+                              color:       (u.plan === 'top' || u.plan === 'pro') ? 'var(--red)' : 'var(--accent)',
+                            }}
+                            onClick={() => ciclarPlan(u.id, u.plan)}
+                          >
+                            {planBtnLabel(u)}
+                          </button>
+                        </>
+                    }
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -412,7 +456,6 @@ function estadoBadge(e) {
 // ════════════════════════════════════════════════════════════
 //  SECCIÓN: MI LIGA (liga de pruebas del admin)
 // ════════════════════════════════════════════════════════════
-// Tabs disponibles para la liga del admin — idénticos al organizador
 const LIGA_TABS = [
   { id: 'tabla',       label: 'Tabla'          },
   { id: 'fixture',     label: 'Fixture'        },
@@ -447,14 +490,11 @@ function SeccionMiLiga({ profile }) {
     setLiga(l); setEquipos(eqs); setPartidos(pts);
   }, []);
 
-  // Buscar liga existente del admin (marcada como prueba)
   useEffect(() => {
     if (!profile) return;
     getMisLigas(profile.id).then(async ligas => {
       const prueba = ligas.find(l => l.config?.esPrueba);
-      if (prueba) {
-        await cargar(prueba.id);
-      }
+      if (prueba) await cargar(prueba.id);
       setLoading(false);
     });
   }, [profile, cargar]);
@@ -470,7 +510,11 @@ function SeccionMiLiga({ profile }) {
         nombre:      'Liga de Prueba Admin',
         temporada:   'Prueba',
         ownerId:     profile.id,
-        config:      { esPrueba: true, usarSets: true, usarPuntos: true, ptsVictoria: 2, ptsBono: 1, ptsDerota: 0, vueltas: 2, precioInscripcion: 0, precioArbitraje: 0 },
+        config:      {
+          esPrueba: true, usarSets: true, usarPuntos: true,
+          ptsVictoria: 2, ptsBono: 1, ptsDerota: 0,
+          vueltas: 2, precioInscripcion: 0, precioArbitraje: 0,
+        },
         reglas:      REGLAS_PRUEBA,
         playoffsCfg: {},
       });
@@ -501,7 +545,13 @@ function SeccionMiLiga({ profile }) {
     );
   }
 
-  const tabProps = { liga, equipos, partidos, refresh, updateLiga: cambios => setLiga(l => ({ ...l, ...cambios })) };
+  const tabProps = {
+    liga,
+    equipos,
+    partidos,
+    refresh,
+    updateLiga: cambios => setLiga(l => ({ ...l, ...cambios })),
+  };
 
   return (
     <>
@@ -512,7 +562,11 @@ function SeccionMiLiga({ profile }) {
       </div>
       <nav className="tab-nav" style={{ marginBottom: 0 }}>
         {LIGA_TABS.map(t => (
-          <button key={t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => setActiveTab(t.id)}>
+          <button
+            key={t.id}
+            className={activeTab === t.id ? 'active' : ''}
+            onClick={() => setActiveTab(t.id)}
+          >
             {t.label}
           </button>
         ))}
@@ -522,10 +576,16 @@ function SeccionMiLiga({ profile }) {
         {activeTab === 'fixture'     && <TabFixture    {...tabProps} />}
         {activeTab === 'partidos'    && <TabPartidos   {...tabProps} />}
         {activeTab === 'equipos'     && <TabEquipos    {...tabProps} />}
-        {activeTab === 'playoffs'    && <TabPlayoffs   {...tabProps} />}
+        {activeTab === 'playoffs'    && <TabPlayoffs   liga={liga} equipos={equipos} partidos={partidos} refresh={refresh} />}
         {activeTab === 'finanzas'    && <TabFinanzas   {...tabProps} />}
         {activeTab === 'comentarios' && <TabComentarios liga={liga} />}
-        {activeTab === 'config'      && <TabConfig     liga={liga} refresh={refresh} updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))} />}
+        {activeTab === 'config'      && (
+          <TabConfig
+            liga={liga}
+            refresh={refresh}
+            updateLiga={cambios => setLiga(l => ({ ...l, ...cambios }))}
+          />
+        )}
       </div>
     </>
   );
