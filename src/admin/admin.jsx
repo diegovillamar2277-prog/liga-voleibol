@@ -296,10 +296,12 @@ function SeccionUsuarios({ profile }) {
                       <span className={`badge ${badge.color}`}>{badge.label}</span>
                       {u.plan_expira && !['basico','free'].includes(u.plan) && (
                         <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '.15rem' }}>
-                          {u.plan_expira === 'forever'
-                            ? '♾ Para siempre'
-                            : `Hasta ${new Date(u.plan_expira).toLocaleDateString('es-MX')}`
-                          }
+                          Hasta {new Date(u.plan_expira).toLocaleDateString('es-MX')}
+                        </div>
+                      )}
+                      {!u.plan_expira && !['basico','free',null,undefined].includes(u.plan) && (
+                        <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '.15rem' }}>
+                          ♾ Para siempre
                         </div>
                       )}
                     </td>
@@ -362,9 +364,14 @@ const OPCIONES_PLAN = [
 function planActualToOpcion(u) {
   const p = u.plan || 'basico';
   if (p === 'basico' || p === 'free') return 'basico';
-  if (p === 'pro') return 'top_forever'; // legacy
-  if (u.plan_expira === 'forever') return p === 'top' ? 'top_forever' : 'medio_forever';
-  return 'basico'; // default si no matchea
+  if (p === 'pro' || p === 'top') {
+    // Si no tiene fecha de expiración = para siempre
+    return u.plan_expira ? 'top_6meses' : 'top_forever';
+  }
+  if (p === 'medio') {
+    return u.plan_expira ? 'medio_6meses' : 'medio_forever';
+  }
+  return 'basico';
 }
 
 function PanelUsuario({ u, isSuperAdmin, onRol, onToggle, onPlanCambiado, onCerrar }) {
@@ -386,7 +393,7 @@ function PanelUsuario({ u, isSuperAdmin, onRol, onToggle, onPlanCambiado, onCerr
       } else if (usarFecha && fechaExact) {
         expira = new Date(fechaExact).toISOString();
       } else if (opcionActual.meses === -1) {
-        expira = 'forever';
+        expira = null; // null = sin expiración (para siempre)
       } else if (opcionActual.meses > 0) {
         const d = new Date();
         d.setMonth(d.getMonth() + opcionActual.meses);
