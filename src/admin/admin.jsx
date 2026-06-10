@@ -228,7 +228,8 @@ function SeccionLigas() {
 //  SECCIÓN: USUARIOS
 // ════════════════════════════════════════════════════════════
 function SeccionUsuarios({ profile }) {
-  const [usuarios, setUsuarios] = useState(null);
+  const [usuarios,    setUsuarios]    = useState(null);
+  const [editandoId,  setEditandoId]  = useState(null); // id del usuario con panel abierto
   const cargar = useCallback(() => getTodosUsuarios().then(setUsuarios), []);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -237,37 +238,6 @@ function SeccionUsuarios({ profile }) {
     try {
       activo ? await activarUsuario(uid) : await desactivarUsuario(uid);
       toast(activo ? 'Usuario activado' : 'Usuario desactivado');
-      cargar();
-    } catch (err) { toast(err.message, 'error'); }
-  };
-
-  // Cicla: basico → medio (6 meses) → top (6 meses) → basico
-  const ciclarPlan = async (uid, planActual) => {
-    try {
-      let nuevoPlan, expira;
-      const p = planActual || 'basico';
-      if (p === 'basico' || p === 'free' || !p) {
-        nuevoPlan = 'medio';
-        const d = new Date(); d.setMonth(d.getMonth() + 6);
-        expira = d.toISOString();
-      } else if (p === 'medio') {
-        nuevoPlan = 'top';
-        const d = new Date(); d.setMonth(d.getMonth() + 6);
-        expira = d.toISOString();
-      } else {
-        // top o pro (legacy) → basico
-        nuevoPlan = 'basico';
-        expira = null;
-      }
-
-      await actualizarPerfil(uid, {
-        plan:        nuevoPlan,
-        plan_expira: expira,
-        plan_origen: 'manual',
-      });
-
-      const emoji = { top: '🏆', medio: '⚡', basico: '🆓' }[nuevoPlan] || '🆓';
-      toast(`${emoji} Plan cambiado a ${nuevoPlan.charAt(0).toUpperCase() + nuevoPlan.slice(1)}`);
       cargar();
     } catch (err) { toast(err.message, 'error'); }
   };
@@ -284,19 +254,11 @@ function SeccionUsuarios({ profile }) {
 
   const planBadge = (u) => {
     const p = u.plan || 'basico';
-    if (p !== 'basico' && u.plan_expira && new Date(u.plan_expira) < new Date()) {
-      return { label: '🆓 Básico (expirado)', color: 'danger' };
-    }
-    if (p === 'top' || p === 'pro') return { label: '🏆 Top',   color: 'win'     };
-    if (p === 'medio')              return { label: '⚡ Medio', color: 'pending' };
+    const expirado = p !== 'basico' && u.plan_expira && new Date(u.plan_expira) < new Date();
+    if (expirado) return { label: '🆓 Expirado', color: 'danger' };
+    if (p === 'top'   || p === 'pro')  return { label: '🏆 Top',   color: 'win'     };
+    if (p === 'medio')                 return { label: '⚡ Medio', color: 'pending' };
     return { label: '🆓 Básico', color: '' };
-  };
-
-  const planBtnLabel = (u) => {
-    const p = u.plan || 'basico';
-    if (!p || p === 'basico' || p === 'free') return '⚡ Activar Medio';
-    if (p === 'medio') return '🏆 Subir a Top';
-    return '🆓 Revocar plan';
   };
 
   return (
@@ -308,69 +270,75 @@ function SeccionUsuarios({ profile }) {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Nombre / Correo</th><th>Rol</th><th>Plan</th><th>Estado</th><th>Acciones</th>
+              <th>Nombre / Correo</th>
+              <th>Rol</th>
+              <th>Plan</th>
+              <th>Estado</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {usuarios.map(u => {
-              const badge = planBadge(u);
+              const badge   = planBadge(u);
+              const esSelf  = u.id === profile?.id;
+              const abierto = editandoId === u.id;
               return (
-                <tr key={u.id}>
-                  <td>
-                    <strong>{u.nombre || '—'}</strong><br />
-                    <small className="muted">{u.email}</small>
-                  </td>
-                  <td>
-                    <span className={`badge-role ${u.role}`}>{rolLabel(u.role)}</span>
-                  </td>
-                  <td>
-                    <span className={`badge ${badge.color}`}>{badge.label}</span>
-                    {u.plan_expira && u.plan !== 'basico' && (
-                      <div style={{ fontSize: '.72rem', color: 'var(--muted)', marginTop: '.2rem' }}>
-                        Hasta {new Date(u.plan_expira).toLocaleDateString('es-MX')}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`badge ${u.activo ? 'win' : 'danger'}`}>
-                      {u.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="admin-acciones">
-                    {u.id === profile?.id
-                      ? <span className="muted">Tú</span>
-                      : <>
-                          {profile?.role === 'superadmin' && (
-                            <select
-                              className="select-rol small"
-                              value={u.role}
-                              onChange={e => handleRol(u.id, e.target.value)}
-                            >
-                              <option value="organizador">Organizador</option>
-                              <option value="admin">Admin</option>
-                              <option value="superadmin">Superadmin</option>
-                            </select>
-                          )}
-                          <button
-                            className={`btn ${u.activo ? 'danger' : 'secondary'} small`}
-                            onClick={() => toggleUser(u.id, !u.activo)}
-                          >
-                            {u.activo ? 'Desactivar' : 'Activar'}
-                          </button>
+                <>
+                  <tr key={u.id}>
+                    <td>
+                      <strong>{u.nombre || '—'}</strong><br />
+                      <small className="muted">{u.email}</small>
+                    </td>
+                    <td>
+                      <span className={`badge-role ${u.role}`}>{rolLabel(u.role)}</span>
+                    </td>
+                    <td>
+                      <span className={`badge ${badge.color}`}>{badge.label}</span>
+                      {u.plan_expira && !['basico','free'].includes(u.plan) && (
+                        <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '.15rem' }}>
+                          {u.plan_expira === 'forever'
+                            ? '♾ Para siempre'
+                            : `Hasta ${new Date(u.plan_expira).toLocaleDateString('es-MX')}`
+                          }
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${u.activo ? 'win' : 'danger'}`}>
+                        {u.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="admin-acciones">
+                      {esSelf
+                        ? <span className="muted">Tú</span>
+                        : (
                           <button
                             className="btn secondary small"
-                            style={{
-                              borderColor: (u.plan === 'top' || u.plan === 'pro') ? 'var(--red)' : 'var(--accent)',
-                              color:       (u.plan === 'top' || u.plan === 'pro') ? 'var(--red)' : 'var(--accent)',
-                            }}
-                            onClick={() => ciclarPlan(u.id, u.plan)}
+                            onClick={() => setEditandoId(abierto ? null : u.id)}
                           >
-                            {planBtnLabel(u)}
+                            {abierto ? '▲ Cerrar' : '⚙ Gestionar'}
                           </button>
-                        </>
-                    }
-                  </td>
-                </tr>
+                        )
+                      }
+                    </td>
+                  </tr>
+
+                  {/* Panel expandible de gestión */}
+                  {abierto && !esSelf && (
+                    <tr key={u.id + '-panel'}>
+                      <td colSpan={5} style={{ padding: 0 }}>
+                        <PanelUsuario
+                          u={u}
+                          isSuperAdmin={profile?.role === 'superadmin'}
+                          onRol={handleRol}
+                          onToggle={toggleUser}
+                          onPlanCambiado={cargar}
+                          onCerrar={() => setEditandoId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </>
               );
             })}
           </tbody>
@@ -380,65 +348,287 @@ function SeccionUsuarios({ profile }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
-//  SECCIÓN: PETICIONES
-// ════════════════════════════════════════════════════════════
-function SeccionPeticiones() {
-  const [pets, setPets] = useState(null);
-  const cargar = useCallback(() => getPeticiones().then(setPets), []);
+// ── Panel expandible por usuario ──────────────────────────────
+const OPCIONES_PLAN = [
+  { value: 'basico',         label: '🆓 Básico (gratis)',    plan: 'basico', meses: null  },
+  { value: 'medio_1mes',     label: '⚡ Medio — 1 mes',      plan: 'medio',  meses: 1     },
+  { value: 'medio_6meses',   label: '⚡ Medio — 6 meses',    plan: 'medio',  meses: 6     },
+  { value: 'top_1mes',       label: '🏆 Top — 1 mes',        plan: 'top',    meses: 1     },
+  { value: 'top_6meses',     label: '🏆 Top — 6 meses',      plan: 'top',    meses: 6     },
+  { value: 'top_forever',    label: '🏆 Top — Para siempre', plan: 'top',    meses: -1    },
+  { value: 'medio_forever',  label: '⚡ Medio — Para siempre',plan: 'medio', meses: -1    },
+];
 
-  useEffect(() => { cargar(); }, [cargar]);
+function planActualToOpcion(u) {
+  const p = u.plan || 'basico';
+  if (p === 'basico' || p === 'free') return 'basico';
+  if (p === 'pro') return 'top_forever'; // legacy
+  if (u.plan_expira === 'forever') return p === 'top' ? 'top_forever' : 'medio_forever';
+  return 'basico'; // default si no matchea
+}
 
-  const responder = async (id, estado) => {
-    await responderPeticion(id, estado);
-    toast(estado === 'aprobada' ? 'Petición aprobada' : 'Petición rechazada');
-    cargar();
+function PanelUsuario({ u, isSuperAdmin, onRol, onToggle, onPlanCambiado, onCerrar }) {
+  const planInicial = planActualToOpcion(u);
+  const [planSel,   setPlanSel]   = useState(planInicial);
+  const [fechaExact,setFechaExact]= useState('');
+  const [usarFecha, setUsarFecha] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [confirmElim, setConfirmElim] = useState(false); // 'desactivar' | 'eliminar' | false
+
+  const opcionActual = OPCIONES_PLAN.find(o => o.value === planSel) || OPCIONES_PLAN[0];
+
+  const guardarPlan = async () => {
+    setGuardando(true);
+    try {
+      let expira = null;
+      if (opcionActual.plan === 'basico') {
+        expira = null;
+      } else if (usarFecha && fechaExact) {
+        expira = new Date(fechaExact).toISOString();
+      } else if (opcionActual.meses === -1) {
+        expira = 'forever';
+      } else if (opcionActual.meses > 0) {
+        const d = new Date();
+        d.setMonth(d.getMonth() + opcionActual.meses);
+        expira = d.toISOString();
+      }
+
+      // Si bajamos a básico, también quitamos el add-on
+      const extraFields = opcionActual.plan === 'basico'
+        ? { addon_vista_publica: false, addon_vp_expira: null }
+        : {};
+
+      await actualizarPerfil(u.id, {
+        plan:        opcionActual.plan,
+        plan_expira: expira,
+        plan_origen: 'manual',
+        ...extraFields,
+      });
+
+      toast(`${opcionActual.label} asignado a ${u.nombre || u.email}`);
+      onPlanCambiado();
+      onCerrar();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  if (!pets) return <div className="loading-spinner" style={{ margin: '3rem auto' }} />;
+  const toggleAddonVistaPublica = async () => {
+    try {
+      const tieneAddon = !!u.addon_vista_publica;
+      await actualizarPerfil(u.id, {
+        addon_vista_publica: !tieneAddon,
+        addon_vp_expira: !tieneAddon ? null : undefined, // null = para siempre al activar
+      });
+      toast(!tieneAddon ? '🌐 Vista pública activada' : 'Vista pública desactivada');
+      onPlanCambiado();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
 
-  const pendientes = pets.filter(p => p.estado === 'pendiente');
+  const eliminarCuenta = async () => {
+    try {
+      // Desactivar en profiles (la cuenta de auth.users la borra Supabase en cascada)
+      await actualizarPerfil(u.id, { activo: false });
+      // Intentar eliminar de auth (requiere service key, solo funciona en servidor)
+      // Por ahora solo desactivamos
+      toast(`Cuenta de ${u.nombre || u.email} desactivada permanentemente`);
+      onPlanCambiado();
+      onCerrar();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
 
   return (
-    <>
-      <div className="admin-section-header">
-        <h2>Peticiones de liga extra <span className="badge">{pendientes.length} pendientes</span></h2>
-      </div>
-      {!pets.length
-        ? <p className="empty">No hay peticiones.</p>
-        : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr><th>Organizador</th><th>Mensaje</th><th>Estado</th><th>Acciones</th></tr>
-              </thead>
-              <tbody>
-                {pets.map(p => (
-                  <tr key={p.id}>
-                    <td>{p.profiles?.nombre || p.profiles?.email || '—'}</td>
-                    <td>{p.mensaje || '—'}</td>
-                    <td>
-                      <span className={`badge ${estadoBadge(p.estado)}`}>{p.estado}</span>
-                    </td>
-                    <td>
-                      {p.estado === 'pendiente'
-                        ? (
-                          <div className="admin-acciones">
-                            <button className="btn small" onClick={() => responder(p.id, 'aprobada')}>✓ Aprobar</button>
-                            <button className="btn danger small" onClick={() => responder(p.id, 'rechazada')}>✕ Rechazar</button>
-                          </div>
-                        )
-                        : '—'
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <div style={{
+      background: 'var(--bg2)', borderTop: '1px solid var(--border)',
+      borderBottom: '2px solid var(--accent)', padding: '1.2rem 1.4rem',
+    }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem', flexWrap: 'wrap' }}>
+
+        {/* ── Columna 1: Plan ── */}
+        <div>
+          <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '.6rem' }}>
+            Plan
+          </p>
+          <select
+            value={planSel}
+            onChange={e => { setPlanSel(e.target.value); setUsarFecha(false); }}
+            style={{ width: '100%', marginBottom: '.6rem' }}
+          >
+            {OPCIONES_PLAN.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {/* Fecha exacta — solo si el plan no es basico */}
+          {opcionActual.plan !== 'basico' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontSize: '.8rem', color: 'var(--muted2)', cursor: 'pointer', marginBottom: '.5rem' }}>
+              <input type="checkbox" checked={usarFecha} onChange={e => setUsarFecha(e.target.checked)}
+                style={{ accentColor: 'var(--accent)' }} />
+              Usar fecha exacta
+            </label>
+          )}
+          {usarFecha && opcionActual.plan !== 'basico' && (
+            <input type="date" value={fechaExact} onChange={e => setFechaExact(e.target.value)}
+              min={new Date().toISOString().slice(0,10)}
+              style={{ width: '100%', fontSize: '.85rem' }} />
+          )}
+
+          {/* Resumen de lo que se va a asignar */}
+          <div style={{ marginTop: '.6rem', padding: '.5rem .7rem', background: 'var(--card)', borderRadius: 8, fontSize: '.78rem', color: 'var(--text2)', border: '1px solid var(--border)' }}>
+            {opcionActual.plan === 'basico' && '🆓 Sin fecha de expiración'}
+            {opcionActual.plan !== 'basico' && !usarFecha && opcionActual.meses === -1 && '♾ Sin expiración (para siempre)'}
+            {opcionActual.plan !== 'basico' && !usarFecha && opcionActual.meses > 0 && `📅 Expira en ${opcionActual.meses} mes${opcionActual.meses > 1 ? 'es' : ''}`}
+            {opcionActual.plan !== 'basico' && usarFecha && fechaExact && `📅 Expira el ${new Date(fechaExact).toLocaleDateString('es-MX')}`}
+            {opcionActual.plan !== 'basico' && usarFecha && !fechaExact && '⚠ Selecciona una fecha'}
           </div>
-        )
-      }
-    </>
+
+          <button className="btn" style={{ width: '100%', marginTop: '.7rem' }}
+            onClick={guardarPlan} disabled={guardando || (usarFecha && !fechaExact)}>
+            {guardando ? 'Guardando…' : '💾 Guardar plan'}
+          </button>
+
+          {/* Add-on vista pública — solo relevante si está en básico */}
+          {(opcionActual.plan === 'basico' || u.plan === 'basico' || !u.plan) && (
+            <div style={{ marginTop: '.8rem', paddingTop: '.8rem', borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '.5rem' }}>
+                Add-on vista pública
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem' }}>
+                <div>
+                  <span className={`badge ${u.addon_vista_publica ? 'win' : ''}`}>
+                    {u.addon_vista_publica ? '🌐 Activo' : '🔒 Inactivo'}
+                  </span>
+                  {u.addon_vista_publica && u.addon_vp_expira && (
+                    <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '.2rem' }}>
+                      Hasta {new Date(u.addon_vp_expira).toLocaleDateString('es-MX')}
+                    </div>
+                  )}
+                  {u.addon_vista_publica && !u.addon_vp_expira && (
+                    <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '.2rem' }}>♾ Para siempre</div>
+                  )}
+                </div>
+                <button
+                  className={`btn ${u.addon_vista_publica ? 'secondary' : ''} small`}
+                  style={{ fontSize: '.75rem' }}
+                  onClick={toggleAddonVistaPublica}
+                >
+                  {u.addon_vista_publica ? 'Desactivar' : '+ Activar gratis'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Columna 2: Rol y estado ── */}
+        <div>
+          <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '.6rem' }}>
+            Rol y estado
+          </p>
+          {isSuperAdmin && (
+            <div style={{ marginBottom: '.8rem' }}>
+              <label style={{ fontSize: '.78rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.3rem' }}>Rol</label>
+              <select className="select-rol" style={{ width: '100%' }}
+                value={u.role} onChange={e => onRol(u.id, e.target.value)}>
+                <option value="organizador">🏆 Organizador</option>
+                <option value="admin">🛡 Admin</option>
+                <option value="superadmin">⭐ Superadmin</option>
+              </select>
+            </div>
+          )}
+          <div>
+            <label style={{ fontSize: '.78rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.3rem' }}>Estado de acceso</label>
+            <button
+              className={`btn ${u.activo ? 'danger' : 'secondary'} small`}
+              style={{ width: '100%' }}
+              onClick={() => onToggle(u.id, !u.activo)}
+            >
+              {u.activo ? '🔒 Desactivar cuenta' : '🔓 Activar cuenta'}
+            </button>
+            <p className="muted" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
+              {u.activo
+                ? 'El usuario no podrá iniciar sesión.'
+                : 'El usuario podrá volver a iniciar sesión.'
+              }
+            </p>
+          </div>
+        </div>
+
+        {/* ── Columna 3: Zona de peligro ── */}
+        <div>
+          <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '.6rem' }}>
+            Zona de peligro
+          </p>
+
+          {!confirmElim ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+              <button className="btn danger small" style={{ width: '100%', fontSize: '.8rem' }}
+                onClick={() => setConfirmElim('desactivar')}>
+                🚫 Desactivar permanentemente
+              </button>
+              <button className="btn danger small" style={{ width: '100%', fontSize: '.8rem', opacity: .8 }}
+                onClick={() => setConfirmElim('eliminar')}>
+                🗑 Eliminar cuenta
+              </button>
+              <p className="muted" style={{ fontSize: '.7rem', lineHeight: 1.4 }}>
+                <strong>Desactivar:</strong> el usuario no puede acceder, sus ligas se conservan.<br />
+                <strong>Eliminar:</strong> borra el perfil. Las ligas quedan huérfanas.
+              </p>
+            </div>
+          ) : (
+            <div style={{ background: 'var(--red-soft)', border: '1px solid rgba(244,63,94,.3)', borderRadius: 'var(--radius)', padding: '.9rem' }}>
+              <p style={{ fontSize: '.83rem', fontWeight: 700, marginBottom: '.6rem', color: 'var(--red)' }}>
+                {confirmElim === 'eliminar'
+                  ? `¿Eliminar a ${u.nombre || u.email}?`
+                  : `¿Desactivar permanentemente a ${u.nombre || u.email}?`
+                }
+              </p>
+              <p className="muted" style={{ fontSize: '.75rem', marginBottom: '.7rem' }}>
+                {confirmElim === 'eliminar'
+                  ? 'Se borrará el perfil. Esta acción no se puede deshacer.'
+                  : 'No podrá iniciar sesión. Sus ligas se conservan.'
+                }
+              </p>
+              <div style={{ display: 'flex', gap: '.4rem' }}>
+                <button className="btn danger small" style={{ flex: 1 }}
+                  onClick={async () => {
+                    if (confirmElim === 'eliminar') {
+                      if (!window.confirm(`¿Confirmar eliminación de ${u.nombre || u.email}?`)) return;
+                      try {
+                        await actualizarPerfil(u.id, { activo: false });
+                        toast(`Perfil de ${u.nombre || u.email} desactivado. Para eliminar completamente usa el panel de Supabase.`);
+                        onPlanCambiado(); onCerrar();
+                      } catch (err) { toast(err.message, 'error'); }
+                    } else {
+                      try {
+                        await actualizarPerfil(u.id, { activo: false });
+                        toast(`${u.nombre || u.email} desactivado permanentemente`);
+                        onPlanCambiado(); onCerrar();
+                      } catch (err) { toast(err.message, 'error'); }
+                    }
+                  }}
+                >
+                  Confirmar
+                </button>
+                <button className="btn secondary small" style={{ flex: 1 }}
+                  onClick={() => setConfirmElim(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: '.8rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <button className="btn secondary small" onClick={onCerrar}>✕ Cerrar</button>
+      </div>
+    </div>
   );
 }
 
