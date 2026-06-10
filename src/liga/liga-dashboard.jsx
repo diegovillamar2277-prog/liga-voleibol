@@ -1263,7 +1263,7 @@ export function TabComentarios({ liga }) {
 //  TAB CONFIG
 // ════════════════════════════════════════════════════════════
 export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva }) {
-  const { puedeAlias, puedeCoAdmins, planObj } = useAuth();
+  const { puedeAlias, puedeCoAdmins, planObj, puedeVerPublico, plan, currentProfile } = useAuth();
   const puedeDisenoPublico = planObj?.disenoPublico || false;
 
   const cfg0 = {
@@ -1279,6 +1279,7 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
   const [aliasMsg, setAliasMsg] = useState({ ok: '', err: '' });
   const [miembros, setMiembros] = useState([]);
   const [invEmail, setInvEmail] = useState('');
+  const [mostrarPagoAddon, setMostrarPagoAddon] = useState(false);
 
   useEffect(() => { getMiembros(liga.id).then(setMiembros); }, [liga.id]);
 
@@ -1424,13 +1425,72 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
       </div>
 
       {/* Acceso público */}
+      {mostrarPagoAddon && <ModalPago soloAddon onCerrar={() => setMostrarPagoAddon(false)} />}
       <div className="card">
         <p className="card-subtitle">Acceso público</p>
+
+        {/* Estado del add-on para plan básico */}
+        {plan === 'basico' && (
+          <div style={{
+            marginBottom: '1rem', padding: '.9rem 1rem',
+            borderRadius: 'var(--radius)', border: '1px solid var(--border2)',
+            background: puedeVerPublico ? 'rgba(16,185,129,.06)' : 'var(--bg2)',
+          }}>
+            {puedeVerPublico ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '1.2rem' }}>🌐</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '.88rem', color: 'var(--green)' }}>
+                    Vista pública activa
+                  </div>
+                  <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.1rem' }}>
+                    {currentProfile?.addon_vp_expira
+                      ? `Válido hasta ${new Date(currentProfile.addon_vp_expira).toLocaleDateString('es-MX')}`
+                      : 'Sin fecha de expiración (pago único)'
+                    }
+                  </div>
+                </div>
+                <span className="badge win">✓ Activo</span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem', marginBottom: '.8rem' }}>
+                  <span style={{ fontSize: '1.2rem' }}>🔒</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '.88rem' }}>Vista pública no activa</div>
+                    <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.1rem' }}>
+                      Activa el add-on para que cualquiera vea tu liga con el link.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
+                  <button className="btn small" onClick={() => setMostrarPagoAddon(true)}>
+                    🌐 Activar vista pública — $100 MXN
+                  </button>
+                  <button className="btn secondary small" onClick={() => setMostrarPagoAddon(true)}>
+                    Ver opciones
+                  </button>
+                </div>
+                <p className="muted" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
+                  $100 MXN pago único (para siempre) · $70 MXN por temporada (6 meses)
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Para planes medio y top: vista pública incluida */}
+        {plan !== 'basico' && (
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '.6rem' }}>
+            <span className="badge win">✓ Vista pública incluida en tu plan</span>
+          </div>
+        )}
+
         <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>
           Comparte el link para que cualquiera vea tu liga sin iniciar sesión.
         </p>
 
-        {/* Alias — solo si el plan lo permite */}
+        {/* Alias — solo plan Top */}
         {puedeAlias ? (
           <div style={{ marginBottom: '1.2rem' }}>
             <label style={{ fontSize: '.82rem', color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>
