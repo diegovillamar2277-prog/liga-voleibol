@@ -1630,37 +1630,99 @@ export function TabConfig({ liga, refresh, updateLiga, onEliminar, onCrearNueva 
 // ════════════════════════════════════════════════════════════
 
 const FUENTES = [
-  { value: 'Inter',            label: 'Inter (predeterminada)' },
-  { value: 'Oswald',           label: 'Oswald (deportiva)' },
-  { value: 'Montserrat',       label: 'Montserrat (moderna)' },
-  { value: 'Bebas Neue',       label: 'Bebas Neue (impacto)' },
-  { value: 'Roboto Condensed', label: 'Roboto Condensed' },
+  { value: 'Inter',            label: 'Inter — predeterminada'  },
+  { value: 'Oswald',           label: 'Oswald — deportiva'      },
+  { value: 'Montserrat',       label: 'Montserrat — moderna'    },
+  { value: 'Bebas Neue',       label: 'Bebas Neue — impacto'    },
+  { value: 'Roboto Condensed', label: 'Roboto Condensed'        },
+  { value: 'Poppins',          label: 'Poppins — redondeada'    },
+  { value: 'Raleway',          label: 'Raleway — elegante'      },
 ];
+
+const DISENO_DEFAULT = {
+  // Header
+  colorHeaderFondo:    '#080f1e',
+  colorHeaderTexto:    '#ffffff',
+  fondoUrl:            '',
+  fondoOpacidad:       60,          // 0-100 overlay oscuro sobre el fondo
+  logoUrl:             '',
+  mostrarLogo:         true,
+  mostrarNombre:       true,
+  nombrePersonal:      '',
+  slogan:              '',
+  mostrarCodigo:       true,
+  // Tabs
+  colorTabFondo:       '#111c2e',
+  colorTabActivo:      '#f59e0b',
+  colorTabActivoTexto: '#0a0a0a',
+  colorTabTexto:       '#94a3b8',
+  // Tabla / contenido
+  colorContenidoFondo: '#080f1e',
+  colorTablaFondo:     '#111c2e',
+  colorTablaEncabezado:'#172236',
+  colorTablaTexto:     '#eef2ff',
+  colorTablaTextoMuted:'#64748b',
+  tablaTransparencia:  0,           // 0-100, % de transparencia
+  colorPrimario:       '#f59e0b',   // badges, wins, pts
+  colorVictoria:       '#10b981',
+  colorDerrota:        '#f43f5e',
+  // Tipografía
+  fuente:              'Inter',
+};
+
+function ColorPicker({ label, hint, value, onChange }) {
+  return (
+    <div>
+      <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.25rem' }}>
+        {label}
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+        <input type="color" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: 36, height: 32, borderRadius: 7, border: '1px solid var(--border2)', cursor: 'pointer', padding: 2, background: 'var(--bg2)', flexShrink: 0 }} />
+        <input type="text" value={value} maxLength={7} onChange={e => onChange(e.target.value)}
+          style={{ width: 82, fontFamily: 'monospace', fontSize: '.8rem', padding: '.25rem .4rem', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)' }} />
+      </div>
+      {hint && <div style={{ fontSize: '.65rem', color: 'var(--muted)', marginTop: '.15rem' }}>{hint}</div>}
+    </div>
+  );
+}
+
+function SliderPicker({ label, hint, value, onChange, min = 0, max = 100, suffix = '%' }) {
+  return (
+    <div>
+      <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.25rem' }}>
+        {label} <span style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>{value}{suffix}</span>
+      </label>
+      <input type="range" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: 'var(--accent)' }} />
+      {hint && <div style={{ fontSize: '.65rem', color: 'var(--muted)', marginTop: '.1rem' }}>{hint}</div>}
+    </div>
+  );
+}
+
+function SeccionDiseno({ titulo, children }) {
+  return (
+    <div style={{ marginBottom: '1.2rem' }}>
+      <div style={{ fontSize: '.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--accent)', marginBottom: '.7rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        {titulo}
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function TabDisenoPublico({ liga, refresh, updateLiga }) {
   const disenoInicial = liga.config?.diseno || {};
-  const [diseno, setDiseno] = useState({
-    colorPrimario:   '#f59e0b',
-    colorFondo:      '#080f1e',
-    colorTexto:      '#eef2ff',
-    colorCard:       '#111c2e',
-    logoUrl:         '',
-    logoFile:        null,
-    fondoUrl:        '',
-    fondoFile:       null,
-    fuente:          'Inter',
-    nombrePersonal:  liga.nombre || '',
-    mostrarCodigo:   true,
-    ...disenoInicial,
-  });
+  const [d, setD] = useState({ ...DISENO_DEFAULT, nombrePersonal: liga.nombre || '', ...disenoInicial });
   const [logoPreview,  setLogoPreview]  = useState(disenoInicial.logoUrl  || '');
   const [fondoPreview, setFondoPreview] = useState(disenoInicial.fondoUrl || '');
   const [guardando,    setGuardando]    = useState(false);
-  const [tab,          setTab]          = useState('colores'); // 'colores' | 'imagenes' | 'preview'
+  const [tab,          setTab]          = useState('header');
 
-  const set = (key, val) => setDiseno(d => ({ ...d, [key]: val }));
+  const set = (key, val) => setD(prev => ({ ...prev, [key]: val }));
 
-  // Manejar archivo local → base64 para preview
   const handleArchivo = (e, tipo) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1676,242 +1738,265 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
   const guardar = async () => {
     setGuardando(true);
     try {
-      const nuevoCfg = { ...(liga.config || {}), diseno };
+      const nuevoCfg = { ...(liga.config || {}), diseno: d };
       await actualizarLiga(liga.id, { config: nuevoCfg });
       updateLiga({ config: nuevoCfg });
       toast('Diseño guardado ✓');
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      setGuardando(false);
-    }
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setGuardando(false); }
   };
 
   const resetDiseno = async () => {
     if (!window.confirm('¿Restablecer el diseño predeterminado?')) return;
-    const vacio = {};
-    const nuevoCfg = { ...(liga.config || {}), diseno: vacio };
+    const nuevo = { ...DISENO_DEFAULT, nombrePersonal: liga.nombre || '' };
+    const nuevoCfg = { ...(liga.config || {}), diseno: nuevo };
     await actualizarLiga(liga.id, { config: nuevoCfg });
     updateLiga({ config: nuevoCfg });
-    setDiseno({
-      colorPrimario: '#f59e0b', colorFondo: '#080f1e',
-      colorTexto: '#eef2ff', colorCard: '#111c2e',
-      logoUrl: '', fondoUrl: '', fuente: 'Inter',
-      nombrePersonal: liga.nombre || '', mostrarCodigo: true,
-    });
-    setLogoPreview(''); setFondoPreview('');
+    setD(nuevo); setLogoPreview(''); setFondoPreview('');
     toast('Diseño restablecido');
   };
 
+  const SUBTABS = [
+    { id: 'header',    label: '🏷 Header'   },
+    { id: 'tabs',      label: '📑 Tabs'     },
+    { id: 'tabla',     label: '📊 Tabla'    },
+    { id: 'tipografia',label: '🔤 Fuente'   },
+    { id: 'preview',   label: '👁 Preview'  },
+  ];
+
   return (
     <div className="card">
-      <p className="card-subtitle">🎨 Diseño de vista pública</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <p className="card-subtitle" style={{ margin: 0 }}>🎨 Diseño de vista pública</p>
+        <div style={{ display: 'flex', gap: '.4rem' }}>
+          <button className="btn secondary small" style={{ color: 'var(--muted)', fontSize: '.75rem' }} onClick={resetDiseno}>
+            Restablecer
+          </button>
+          <button className="btn small" onClick={guardar} disabled={guardando}>
+            {guardando ? 'Guardando…' : '💾 Guardar'}
+          </button>
+        </div>
+      </div>
 
       {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: '.3rem', marginBottom: '1.2rem', background: 'var(--bg2)', borderRadius: 'var(--radius-sm)', padding: '.3rem', border: '1px solid var(--border)' }}>
-        {[
-          { id: 'colores',   label: '🎨 Colores y fuente' },
-          { id: 'imagenes',  label: '🖼 Logo y fondo'     },
-          { id: 'preview',   label: '👁 Preview'          },
-        ].map(t => (
-          <button key={t.id}
-            style={{
-              flex: 1, padding: '.4rem', borderRadius: 6, border: 'none',
-              fontWeight: 600, cursor: 'pointer', fontSize: '.8rem',
-              background: tab === t.id ? 'var(--accent)' : 'transparent',
-              color: tab === t.id ? '#0a0a0a' : 'var(--muted2)',
-              transition: 'all .15s',
-            }}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
+      <div style={{ display: 'flex', gap: '.2rem', marginBottom: '1.2rem', background: 'var(--bg2)', borderRadius: 'var(--radius-sm)', padding: '.25rem', border: '1px solid var(--border)', overflowX: 'auto' }}>
+        {SUBTABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, padding: '.38rem .5rem', borderRadius: 6, border: 'none',
+            fontWeight: 600, cursor: 'pointer', fontSize: '.77rem', whiteSpace: 'nowrap',
+            background: tab === t.id ? 'var(--accent)' : 'transparent',
+            color: tab === t.id ? '#0a0a0a' : 'var(--muted2)',
+            transition: 'all .15s',
+          }}>{t.label}</button>
         ))}
       </div>
 
-      {/* ── COLORES Y FUENTE ── */}
-      {tab === 'colores' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem' }}>
-            {[
-              { key: 'colorPrimario', label: 'Color primario',    hint: 'Títulos, badges, acentos' },
-              { key: 'colorFondo',    label: 'Color de fondo',    hint: 'Fondo general de la página' },
-              { key: 'colorTexto',    label: 'Color de texto',    hint: 'Texto principal' },
-              { key: 'colorCard',     label: 'Color de tarjetas', hint: 'Fondo de cards y tabla' },
-            ].map(({ key, label, hint }) => (
-              <div key={key}>
-                <label style={{ fontSize: '.78rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.3rem' }}>
-                  {label}
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-                  <input
-                    type="color"
-                    value={diseno[key]}
-                    onChange={e => set(key, e.target.value)}
-                    style={{ width: 40, height: 36, borderRadius: 8, border: '1px solid var(--border2)', cursor: 'pointer', padding: 2, background: 'var(--bg2)' }}
-                  />
-                  <div>
-                    <input
-                      type="text"
-                      value={diseno[key]}
-                      maxLength={7}
-                      onChange={e => set(key, e.target.value)}
-                      style={{ width: 90, fontFamily: 'monospace', fontSize: '.82rem', padding: '.3rem .5rem', borderRadius: 8, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)' }}
-                    />
-                    <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: '.1rem' }}>{hint}</div>
-                  </div>
+      {/* ── HEADER ── */}
+      {tab === 'header' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+          <SeccionDiseno titulo="FONDO DEL HEADER">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem', marginBottom: '.8rem' }}>
+              <ColorPicker label="Color de fondo" hint="Cuando no hay imagen" value={d.colorHeaderFondo} onChange={v => set('colorHeaderFondo', v)} />
+              <ColorPicker label="Color de texto" value={d.colorHeaderTexto} onChange={v => set('colorHeaderTexto', v)} />
+            </div>
+            <div style={{ marginBottom: '.7rem' }}>
+              <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>Imagen de fondo</label>
+              {fondoPreview && (
+                <div style={{ marginBottom: '.5rem', position: 'relative', display: 'inline-block' }}>
+                  <img src={fondoPreview} alt="fondo" style={{ height: 60, width: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border2)' }} />
+                  <button className="btn danger small" style={{ position: 'absolute', top: -6, right: -6, padding: '.1rem .35rem', fontSize: '.7rem' }}
+                    onClick={() => { setFondoPreview(''); set('fondoUrl', ''); }}>✕</button>
                 </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+                <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'fondo')} style={{ fontSize: '.78rem', color: 'var(--text2)' }} />
+                <input type="url" placeholder="https://... (URL de imagen)" value={d.fondoUrl?.startsWith('data:') ? '' : (d.fondoUrl || '')}
+                  onChange={e => { set('fondoUrl', e.target.value); setFondoPreview(e.target.value); }}
+                  style={{ fontSize: '.82rem' }} />
               </div>
-            ))}
-          </div>
+            </div>
+            {(fondoPreview || d.fondoUrl) && (
+              <SliderPicker label="Oscuridad del overlay" hint="Capa oscura sobre la imagen para legibilidad"
+                value={d.fondoOpacidad} onChange={v => set('fondoOpacidad', v)} />
+            )}
+          </SeccionDiseno>
 
-          <div>
-            <label style={{ fontSize: '.78rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>
-              Tipografía
+          <SeccionDiseno titulo="LOGO">
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div>
+                {logoPreview
+                  ? <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={logoPreview} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, border: '1px solid var(--border2)', background: d.colorHeaderFondo, padding: 4 }} />
+                      <button className="btn danger small" style={{ position: 'absolute', top: -6, right: -6, padding: '.1rem .35rem', fontSize: '.7rem' }}
+                        onClick={() => { setLogoPreview(''); set('logoUrl', ''); }}>✕</button>
+                    </div>
+                  : <div style={{ width: 64, height: 64, borderRadius: 10, border: '1px dashed var(--border2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem' }}>🏐</div>
+                }
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+                <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'logo')} style={{ fontSize: '.78rem', color: 'var(--text2)' }} />
+                <input type="url" placeholder="https://... (URL del logo)" value={d.logoUrl?.startsWith('data:') ? '' : (d.logoUrl || '')}
+                  onChange={e => { set('logoUrl', e.target.value); setLogoPreview(e.target.value); }}
+                  style={{ fontSize: '.82rem' }} />
+              </div>
+            </div>
+            <label className="check-row" style={{ marginTop: '.7rem' }}>
+              <input type="checkbox" checked={d.mostrarLogo !== false} onChange={e => set('mostrarLogo', e.target.checked)} style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+              <span><strong style={{ fontSize: '.85rem' }}>Mostrar logo</strong></span>
             </label>
-            <select
-              value={diseno.fuente}
-              onChange={e => set('fuente', e.target.value)}
-              style={{ maxWidth: 260 }}
-            >
-              {FUENTES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-          </div>
+          </SeccionDiseno>
 
-          <div>
-            <label style={{ fontSize: '.78rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>
-              Nombre personalizado de la liga
-            </label>
-            <input
-              type="text"
-              maxLength={60}
-              value={diseno.nombrePersonal}
-              onChange={e => set('nombrePersonal', e.target.value)}
-              placeholder={liga.nombre}
-              style={{ maxWidth: 320 }}
-            />
-            <p className="muted" style={{ fontSize: '.72rem', marginTop: '.3rem' }}>
-              Opcional. Se mostrará en lugar del nombre oficial.
-            </p>
-          </div>
-
-          <label className="check-row">
-            <input type="checkbox" checked={diseno.mostrarCodigo !== false}
-              onChange={e => set('mostrarCodigo', e.target.checked)}
-              style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
-            <span style={{ display: 'flex', flexDirection: 'column', gap: '.1rem' }}>
-              <strong style={{ fontSize: '.88rem' }}>Mostrar código/alias en la vista pública</strong>
-              <small style={{ color: 'var(--muted)', fontSize: '.75rem' }}>Desactiva si no quieres que aparezca el código de la liga</small>
-            </span>
-          </label>
+          <SeccionDiseno titulo="NOMBRE Y SLOGAN">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+              <div>
+                <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.25rem' }}>Nombre a mostrar</label>
+                <input type="text" maxLength={60} value={d.nombrePersonal} placeholder={liga.nombre}
+                  onChange={e => set('nombrePersonal', e.target.value)} />
+                <div style={{ fontSize: '.65rem', color: 'var(--muted)', marginTop: '.15rem' }}>Deja vacío para usar el nombre oficial</div>
+              </div>
+              <div>
+                <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.25rem' }}>Slogan / subtítulo (opcional)</label>
+                <input type="text" maxLength={80} value={d.slogan || ''} placeholder="Temporada 2025 · Liga amateur"
+                  onChange={e => set('slogan', e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <label className="check-row">
+                  <input type="checkbox" checked={d.mostrarNombre !== false} onChange={e => set('mostrarNombre', e.target.checked)} style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+                  <span><strong style={{ fontSize: '.85rem' }}>Mostrar nombre</strong></span>
+                </label>
+                <label className="check-row">
+                  <input type="checkbox" checked={d.mostrarCodigo !== false} onChange={e => set('mostrarCodigo', e.target.checked)} style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+                  <span><strong style={{ fontSize: '.85rem' }}>Mostrar código</strong></span>
+                </label>
+              </div>
+            </div>
+          </SeccionDiseno>
         </div>
       )}
 
-      {/* ── LOGO Y FONDO ── */}
-      {tab === 'imagenes' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          {/* Logo */}
-          <div>
-            <label style={{ fontSize: '.82rem', color: 'var(--muted2)', fontWeight: 700, display: 'block', marginBottom: '.6rem' }}>
-              Logo de la liga
-            </label>
-            {logoPreview && (
-              <div style={{ marginBottom: '.8rem', display: 'flex', alignItems: 'center', gap: '.8rem' }}>
-                <img src={logoPreview} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, border: '1px solid var(--border2)', background: diseno.colorFondo, padding: 4 }} />
-                <button className="btn danger small" onClick={() => { setLogoPreview(''); set('logoUrl', ''); }}>Quitar logo</button>
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-              <label style={{ fontSize: '.75rem', color: 'var(--muted)', fontWeight: 600 }}>Subir desde dispositivo</label>
-              <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'logo')}
-                style={{ fontSize: '.82rem', color: 'var(--text2)' }} />
-              <label style={{ fontSize: '.75rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.4rem' }}>O pegar URL de imagen</label>
-              <input type="url" placeholder="https://..." value={diseno.logoUrl?.startsWith('data:') ? '' : (diseno.logoUrl || '')}
-                onChange={e => { set('logoUrl', e.target.value); setLogoPreview(e.target.value); }}
-                style={{ maxWidth: 360 }} />
+      {/* ── TABS ── */}
+      {tab === 'tabs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <SeccionDiseno titulo="BARRA DE NAVEGACIÓN">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem' }}>
+              <ColorPicker label="Fondo de la barra" value={d.colorTabFondo} onChange={v => set('colorTabFondo', v)} />
+              <ColorPicker label="Texto inactivo" value={d.colorTabTexto} onChange={v => set('colorTabTexto', v)} />
+              <ColorPicker label="Color tab activo" value={d.colorTabActivo} onChange={v => set('colorTabActivo', v)} />
+              <ColorPicker label="Texto tab activo" value={d.colorTabActivoTexto} onChange={v => set('colorTabActivoTexto', v)} />
             </div>
-          </div>
-
-          {/* Fondo */}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-            <label style={{ fontSize: '.82rem', color: 'var(--muted2)', fontWeight: 700, display: 'block', marginBottom: '.6rem' }}>
-              Imagen de fondo
-            </label>
-            {fondoPreview && (
-              <div style={{ marginBottom: '.8rem' }}>
-                <img src={fondoPreview} alt="fondo" style={{ width: '100%', maxHeight: 100, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border2)' }} />
-                <button className="btn danger small" style={{ marginTop: '.4rem' }} onClick={() => { setFondoPreview(''); set('fondoUrl', ''); }}>Quitar fondo</button>
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-              <label style={{ fontSize: '.75rem', color: 'var(--muted)', fontWeight: 600 }}>Subir desde dispositivo</label>
-              <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'fondo')}
-                style={{ fontSize: '.82rem', color: 'var(--text2)' }} />
-              <label style={{ fontSize: '.75rem', color: 'var(--muted)', fontWeight: 600, marginTop: '.4rem' }}>O pegar URL de imagen</label>
-              <input type="url" placeholder="https://..." value={diseno.fondoUrl?.startsWith('data:') ? '' : (diseno.fondoUrl || '')}
-                onChange={e => { set('fondoUrl', e.target.value); setFondoPreview(e.target.value); }}
-                style={{ maxWidth: 360 }} />
-            </div>
-          </div>
+          </SeccionDiseno>
         </div>
+      )}
+
+      {/* ── TABLA ── */}
+      {tab === 'tabla' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <SeccionDiseno titulo="FONDO Y ESTRUCTURA">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem', marginBottom: '.8rem' }}>
+              <ColorPicker label="Fondo de la sección" hint="Área detrás de la tabla" value={d.colorContenidoFondo} onChange={v => set('colorContenidoFondo', v)} />
+              <ColorPicker label="Fondo de la tabla" hint="Filas del cuerpo" value={d.colorTablaFondo} onChange={v => set('colorTablaFondo', v)} />
+              <ColorPicker label="Fondo de encabezados" hint="Fila de títulos (PJ, PG, etc.)" value={d.colorTablaEncabezado} onChange={v => set('colorTablaEncabezado', v)} />
+              <ColorPicker label="Color de texto" value={d.colorTablaTexto} onChange={v => set('colorTablaTexto', v)} />
+              <ColorPicker label="Texto secundario" hint="PJ, números menores" value={d.colorTablaTextoMuted} onChange={v => set('colorTablaTextoMuted', v)} />
+            </div>
+            <SliderPicker label="Transparencia de la tabla" hint="0% = sólido, 100% = completamente transparente"
+              value={d.tablaTransparencia} onChange={v => set('tablaTransparencia', v)} />
+          </SeccionDiseno>
+          <SeccionDiseno titulo="COLORES DE RESULTADOS">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.8rem' }}>
+              <ColorPicker label="Color primario" hint="Pts, destacados" value={d.colorPrimario} onChange={v => set('colorPrimario', v)} />
+              <ColorPicker label="Victorias (PG)" value={d.colorVictoria} onChange={v => set('colorVictoria', v)} />
+              <ColorPicker label="Derrotas (PP)" value={d.colorDerrota} onChange={v => set('colorDerrota', v)} />
+            </div>
+          </SeccionDiseno>
+        </div>
+      )}
+
+      {/* ── TIPOGRAFÍA ── */}
+      {tab === 'tipografia' && (
+        <SeccionDiseno titulo="FUENTE">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.8rem' }}>
+            {FUENTES.map(f => (
+              <label key={f.value} style={{
+                display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer',
+                padding: '.7rem 1rem', borderRadius: 'var(--radius)',
+                border: `2px solid ${d.fuente === f.value ? 'var(--accent)' : 'var(--border2)'}`,
+                background: d.fuente === f.value ? 'var(--accent-soft)' : 'var(--bg2)',
+                transition: 'all .15s',
+              }}>
+                <input type="radio" name="fuente" value={f.value} checked={d.fuente === f.value}
+                  onChange={() => set('fuente', f.value)} style={{ accentColor: 'var(--accent)' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: `'${f.value}', sans-serif`, fontWeight: 700, fontSize: '1rem' }}>
+                    {f.label.split('—')[0].trim()}
+                  </div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>
+                    {f.label.split('—')[1]?.trim()}
+                  </div>
+                </div>
+                <div style={{ fontFamily: `'${f.value}', sans-serif`, fontSize: '.82rem', color: 'var(--muted2)' }}>
+                  Abc 123
+                </div>
+              </label>
+            ))}
+          </div>
+        </SeccionDiseno>
       )}
 
       {/* ── PREVIEW ── */}
       {tab === 'preview' && (
         <div>
           <p className="muted" style={{ fontSize: '.78rem', marginBottom: '1rem' }}>
-            Así se verá tu liga pública con el diseño actual.
+            Preview en tiempo real — refleja exactamente cómo se verá la vista pública.
           </p>
-          <PreviewVistaPublica liga={liga} diseno={diseno} logoPreview={logoPreview} fondoPreview={fondoPreview} />
+          <PreviewVistaPublica liga={liga} d={d} logoPreview={logoPreview} fondoPreview={fondoPreview} />
         </div>
       )}
-
-      {/* Botones guardar/reset */}
-      <div style={{ display: 'flex', gap: '.6rem', marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-        <button className="btn" onClick={guardar} disabled={guardando}>
-          {guardando ? 'Guardando…' : '💾 Guardar diseño'}
-        </button>
-        <button className="btn secondary" onClick={() => setTab('preview')}>
-          👁 Preview
-        </button>
-        <button className="btn secondary" style={{ marginLeft: 'auto', color: 'var(--muted)' }} onClick={resetDiseno}>
-          Restablecer
-        </button>
-      </div>
     </div>
   );
 }
 
-// ── Preview miniatura de la vista pública ─────────────────────
-function PreviewVistaPublica({ liga, diseno, logoPreview, fondoPreview }) {
-  const fondo  = fondoPreview || diseno.fondoUrl || '';
-  const logo   = logoPreview  || diseno.logoUrl  || '';
-  const nombre = diseno.nombrePersonal?.trim() || liga.nombre;
+// ── Preview completo de la vista pública ──────────────────────
+function PreviewVistaPublica({ liga, d, logoPreview, fondoPreview }) {
+  const fondo  = fondoPreview || d.fondoUrl || '';
+  const logo   = logoPreview  || d.logoUrl  || '';
+  const nombre = d.nombrePersonal?.trim() || liga.nombre;
+  const tablaAlpha = Math.round((d.tablaTransparencia || 0) * 2.55).toString(16).padStart(2, '0');
+  const tablaFondo = d.colorTablaFondo + tablaAlpha;
+  const encabFondo = d.colorTablaEncabezado + tablaAlpha;
 
   return (
     <div style={{
       borderRadius: 'var(--radius-lg)', border: '1px solid var(--border2)',
-      overflow: 'hidden', maxWidth: 480, margin: '0 auto',
-      fontFamily: diseno.fuente !== 'Inter' ? `'${diseno.fuente}', sans-serif` : 'inherit',
+      overflow: 'hidden', maxWidth: 500, margin: '0 auto',
+      fontFamily: d.fuente !== 'Inter' ? `'${d.fuente}', sans-serif` : 'inherit',
+      boxShadow: '0 8px 32px rgba(0,0,0,.4)',
     }}>
-      {/* Header preview */}
+      {/* Header */}
       <div style={{
-        background: fondo ? `url(${fondo}) center/cover` : diseno.colorFondo,
-        padding: '1.2rem 1rem',
-        position: 'relative',
+        background: fondo ? `url(${fondo}) center/cover no-repeat` : d.colorHeaderFondo,
+        padding: '1.4rem 1.2rem', position: 'relative',
       }}>
-        {fondo && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '.8rem' }}>
-          {logo
-            ? <img src={logo} alt="logo" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 8, background: 'rgba(255,255,255,.1)' }} />
-            : <span style={{ fontSize: '2rem' }}>🏐</span>
-          }
+        {fondo && (
+          <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${(d.fondoOpacidad || 60) / 100})` }} />
+        )}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '.9rem' }}>
+          {d.mostrarLogo !== false && (
+            logo
+              ? <img src={logo} alt="logo" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: 'rgba(255,255,255,.08)', padding: 4, flexShrink: 0 }} />
+              : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0 }}>🏐</div>
+          )}
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: diseno.colorTexto, letterSpacing: '-.02em' }}>
-              {nombre}
-            </div>
-            {diseno.mostrarCodigo !== false && (
-              <code style={{ fontSize: '.72rem', color: diseno.colorPrimario, fontFamily: 'monospace', letterSpacing: '.06em' }}>
+            {d.mostrarNombre !== false && (
+              <div style={{ fontWeight: 900, fontSize: '1.15rem', color: d.colorHeaderTexto, letterSpacing: '-.02em', lineHeight: 1.2 }}>
+                {nombre}
+              </div>
+            )}
+            {d.slogan && (
+              <div style={{ fontSize: '.78rem', color: d.colorHeaderTexto + 'bb', marginTop: '.15rem' }}>{d.slogan}</div>
+            )}
+            {d.mostrarCodigo !== false && (
+              <code style={{ fontSize: '.7rem', color: d.colorPrimario, fontFamily: 'monospace', letterSpacing: '.06em', marginTop: '.2rem', display: 'block' }}>
                 {liga.alias || liga.codigo}
               </code>
             )}
@@ -1919,34 +2004,49 @@ function PreviewVistaPublica({ liga, diseno, logoPreview, fondoPreview }) {
         </div>
       </div>
 
-      {/* Tabs preview */}
-      <div style={{ background: diseno.colorCard, borderBottom: `2px solid ${diseno.colorPrimario}22`, display: 'flex', gap: '.25rem', padding: '.4rem .6rem', overflowX: 'auto' }}>
-        {['Tabla', 'Fixture', 'Resultados'].map((t, i) => (
+      {/* Tabs */}
+      <div style={{ background: d.colorTabFondo, display: 'flex', gap: '.2rem', padding: '.4rem .6rem', overflowX: 'auto' }}>
+        {['Tabla', 'Resultados', 'Programación', '🏆 Playoffs'].map((t, i) => (
           <div key={t} style={{
-            padding: '.3rem .7rem', borderRadius: 6, fontSize: '.78rem', fontWeight: 600,
-            background: i === 0 ? diseno.colorPrimario : 'transparent',
-            color: i === 0 ? '#0a0a0a' : diseno.colorTexto + '99',
-            whiteSpace: 'nowrap',
+            padding: '.32rem .75rem', borderRadius: 7, fontSize: '.76rem', fontWeight: 700,
+            background: i === 0 ? d.colorTabActivo : 'transparent',
+            color: i === 0 ? d.colorTabActivoTexto : d.colorTabTexto,
+            whiteSpace: 'nowrap', flexShrink: 0,
           }}>{t}</div>
         ))}
       </div>
 
-      {/* Tabla preview */}
-      <div style={{ background: diseno.colorFondo, padding: '.8rem' }}>
-        <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${diseno.colorPrimario}22` }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 0, background: diseno.colorCard }}>
-            {['Equipo', 'PJ', 'PG', 'PTS'].map(h => (
-              <div key={h} style={{ padding: '.4rem .6rem', fontSize: '.68rem', fontWeight: 700, color: diseno.colorTexto + '66', textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${diseno.colorPrimario}22` }}>
+      {/* Contenido — tabla */}
+      <div style={{ background: d.colorContenidoFondo, padding: '.9rem' }}>
+        <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${d.colorPrimario}33` }}>
+          {/* Encabezados */}
+          <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px', background: encabFondo }}>
+            {['#','Equipo','PJ','PG','PP','PTS'].map(h => (
+              <div key={h} style={{ padding: '.45rem .5rem', fontSize: '.65rem', fontWeight: 800, color: d.colorTablaTextoMuted, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${d.colorPrimario}22`, textAlign: h !== 'Equipo' ? 'center' : 'left' }}>
                 {h}
               </div>
             ))}
           </div>
-          {['Equipo Ejemplo A', 'Equipo Ejemplo B', 'Equipo Ejemplo C'].map((eq, i) => (
-            <div key={eq} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', background: i === 0 ? diseno.colorPrimario + '10' : diseno.colorFondo }}>
-              <div style={{ padding: '.4rem .6rem', fontSize: '.8rem', fontWeight: 600, color: diseno.colorTexto }}>{eq}</div>
-              <div style={{ padding: '.4rem .6rem', fontSize: '.8rem', color: diseno.colorTexto + 'aa', textAlign: 'center' }}>{6 - i * 2}</div>
-              <div style={{ padding: '.4rem .6rem', fontSize: '.8rem', color: '#10b981', textAlign: 'center', fontWeight: 700 }}>{5 - i * 2}</div>
-              <div style={{ padding: '.4rem .6rem', fontSize: '.8rem', color: diseno.colorPrimario, textAlign: 'center', fontWeight: 900 }}>{10 - i * 3}</div>
+          {/* Filas de ejemplo */}
+          {[
+            { pos: '🥇', nom: 'Cuervos',   pj: 6, pg: 5, pp: 1, pts: 10 },
+            { pos: '🥈', nom: 'Lagos',     pj: 6, pg: 4, pp: 2, pts: 8  },
+            { pos: '🥉', nom: 'Halcones',  pj: 6, pg: 3, pp: 3, pts: 6  },
+            { pos: '4',  nom: 'Panteras',  pj: 6, pg: 2, pp: 4, pts: 4  },
+          ].map((r, i) => (
+            <div key={r.nom} style={{
+              display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px',
+              background: i === 0
+                ? `${d.colorPrimario}18`
+                : `${d.colorTablaFondo}${(255 - Math.round(d.tablaTransparencia * 2.55)).toString(16).padStart(2,'0')}`,
+              borderBottom: i < 3 ? `1px solid ${d.colorPrimario}11` : 'none',
+            }}>
+              <div style={{ padding: '.42rem .3rem', fontSize: '.78rem', textAlign: 'center', color: d.colorTablaTexto }}>{r.pos}</div>
+              <div style={{ padding: '.42rem .5rem', fontSize: '.82rem', fontWeight: 600, color: d.colorTablaTexto }}>{r.nom}</div>
+              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorTablaTextoMuted, textAlign: 'center' }}>{r.pj}</div>
+              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorVictoria, textAlign: 'center', fontWeight: 700 }}>{r.pg}</div>
+              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorDerrota, textAlign: 'center', fontWeight: 700 }}>{r.pp}</div>
+              <div style={{ padding: '.42rem .3rem', fontSize: '.88rem', color: d.colorPrimario, textAlign: 'center', fontWeight: 900 }}>{r.pts}</div>
             </div>
           ))}
         </div>
