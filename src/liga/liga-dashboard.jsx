@@ -1640,11 +1640,15 @@ const FUENTES = [
 ];
 
 const DISENO_DEFAULT = {
+  // Fondo de página (general — header, tabs y contenido se mezclan con esto)
+  paginaFondoUrl:      '',
+  paginaFondoColor:    '#080f1e',
+  paginaOverlay:       55,          // 0-100 oscuridad del overlay sobre la imagen
+  paginaFondoFijo:     true,        // fondo fijo al hacer scroll
   // Header
+  headerTransparente:  true,        // si true, se mezcla con el fondo de página
   colorHeaderFondo:    '#080f1e',
   colorHeaderTexto:    '#ffffff',
-  fondoUrl:            '',
-  fondoOpacidad:       60,          // 0-100 overlay oscuro sobre el fondo
   logoUrl:             '',
   mostrarLogo:         true,
   mostrarNombre:       true,
@@ -1652,17 +1656,17 @@ const DISENO_DEFAULT = {
   slogan:              '',
   mostrarCodigo:       true,
   // Tabs
+  tabsTransparente:    true,        // si true, se mezcla con el fondo de página
   colorTabFondo:       '#111c2e',
   colorTabActivo:      '#f59e0b',
   colorTabActivoTexto: '#0a0a0a',
   colorTabTexto:       '#94a3b8',
-  // Tabla / contenido
-  colorContenidoFondo: '#080f1e',
+  // Tabla
   colorTablaFondo:     '#111c2e',
   colorTablaEncabezado:'#172236',
   colorTablaTexto:     '#eef2ff',
   colorTablaTextoMuted:'#64748b',
-  tablaTransparencia:  0,           // 0-100, % de transparencia
+  tablaTransparencia:  0,           // 0 = tarjeta sólida, 100 = se ve el fondo de página
   colorPrimario:       '#f59e0b',   // badges, wins, pts
   colorVictoria:       '#10b981',
   colorDerrota:        '#f43f5e',
@@ -1716,10 +1720,10 @@ function SeccionDiseno({ titulo, children }) {
 function TabDisenoPublico({ liga, refresh, updateLiga }) {
   const disenoInicial = liga.config?.diseno || {};
   const [d, setD] = useState({ ...DISENO_DEFAULT, nombrePersonal: liga.nombre || '', ...disenoInicial });
-  const [logoPreview,  setLogoPreview]  = useState(disenoInicial.logoUrl  || '');
-  const [fondoPreview, setFondoPreview] = useState(disenoInicial.fondoUrl || '');
+  const [logoPreview,   setLogoPreview]   = useState(disenoInicial.logoUrl       || '');
+  const [paginaPreview, setPaginaPreview] = useState(disenoInicial.paginaFondoUrl || '');
   const [guardando,    setGuardando]    = useState(false);
-  const [tab,          setTab]          = useState('header');
+  const [tab,          setTab]          = useState('fondo');
 
   const set = (key, val) => setD(prev => ({ ...prev, [key]: val }));
 
@@ -1730,7 +1734,7 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
     reader.onload = ev => {
       const data = ev.target.result;
       if (tipo === 'logo') { setLogoPreview(data); set('logoUrl', data); }
-      else                 { setFondoPreview(data); set('fondoUrl', data); }
+      else                 { setPaginaPreview(data); set('paginaFondoUrl', data); }
     };
     reader.readAsDataURL(file);
   };
@@ -1752,11 +1756,12 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
     const nuevoCfg = { ...(liga.config || {}), diseno: nuevo };
     await actualizarLiga(liga.id, { config: nuevoCfg });
     updateLiga({ config: nuevoCfg });
-    setD(nuevo); setLogoPreview(''); setFondoPreview('');
+    setD(nuevo); setLogoPreview(''); setPaginaPreview('');
     toast('Diseño restablecido');
   };
 
   const SUBTABS = [
+    { id: 'fondo',     label: '🖼 Fondo'    },
     { id: 'header',    label: '🏷 Header'   },
     { id: 'tabs',      label: '📑 Tabs'     },
     { id: 'tabla',     label: '📊 Tabla'    },
@@ -1791,34 +1796,76 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
         ))}
       </div>
 
+      {/* ── FONDO DE PÁGINA ── */}
+      {tab === 'fondo' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+          <div style={{
+            borderRadius: 'var(--radius)', border: '1px dashed var(--border2)',
+            padding: '.9rem 1rem', background: 'var(--accent-soft)', display: 'flex', gap: '.7rem', alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: '1.4rem' }}>💡</span>
+            <p style={{ fontSize: '.8rem', color: 'var(--muted2)', margin: 0, lineHeight: 1.5 }}>
+              Esta es la base de un diseño profesional: una sola imagen o color de fondo para <strong>toda la página</strong>.
+              El header, las pestañas y la tabla pueden ser transparentes para que todo se vea como una sola pieza,
+              igual que las tablas que tus clientes ya diseñan para sus redes sociales.
+            </p>
+          </div>
+
+          <SeccionDiseno titulo="IMAGEN DE FONDO (TODA LA PÁGINA)">
+            {paginaPreview && (
+              <div style={{ marginBottom: '.7rem', position: 'relative', display: 'inline-block' }}>
+                <img src={paginaPreview} alt="fondo" style={{ height: 90, width: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border2)' }} />
+                <button className="btn danger small" style={{ position: 'absolute', top: -6, right: -6, padding: '.1rem .35rem', fontSize: '.7rem' }}
+                  onClick={() => { setPaginaPreview(''); set('paginaFondoUrl', ''); }}>✕</button>
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', marginBottom: '1rem' }}>
+              <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'pagina')} style={{ fontSize: '.78rem', color: 'var(--text2)' }} />
+              <input type="url" placeholder="https://... (URL de imagen)" value={d.paginaFondoUrl?.startsWith('data:') ? '' : (d.paginaFondoUrl || '')}
+                onChange={e => { set('paginaFondoUrl', e.target.value); setPaginaPreview(e.target.value); }}
+                style={{ fontSize: '.82rem' }} />
+              <div style={{ fontSize: '.65rem', color: 'var(--muted)' }}>
+                Recomendado: foto horizontal de buena calidad (mínimo 1200px de ancho).
+              </div>
+            </div>
+
+            {(paginaPreview || d.paginaFondoUrl) && (
+              <>
+                <SliderPicker label="Oscuridad del overlay" hint="Capa oscura sobre la imagen para que el texto se lea bien"
+                  value={d.paginaOverlay} onChange={v => set('paginaOverlay', v)} />
+                <label className="check-row" style={{ marginTop: '.6rem' }}>
+                  <input type="checkbox" checked={d.paginaFondoFijo !== false} onChange={e => set('paginaFondoFijo', e.target.checked)}
+                    style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+                  <span><strong style={{ fontSize: '.85rem' }}>Fondo fijo</strong> <small style={{ color: 'var(--muted)' }}>(no se mueve al hacer scroll)</small></span>
+                </label>
+              </>
+            )}
+          </SeccionDiseno>
+
+          <SeccionDiseno titulo="COLOR DE FONDO">
+            <ColorPicker label="Color base" hint="Se usa si no hay imagen, y detrás del overlay" value={d.paginaFondoColor} onChange={v => set('paginaFondoColor', v)} />
+          </SeccionDiseno>
+        </div>
+      )}
+
       {/* ── HEADER ── */}
       {tab === 'header' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
           <SeccionDiseno titulo="FONDO DEL HEADER">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem', marginBottom: '.8rem' }}>
-              <ColorPicker label="Color de fondo" hint="Cuando no hay imagen" value={d.colorHeaderFondo} onChange={v => set('colorHeaderFondo', v)} />
+            <label className="check-row" style={{ marginBottom: '.8rem' }}>
+              <input type="checkbox" checked={d.headerTransparente !== false} onChange={e => set('headerTransparente', e.target.checked)}
+                style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: '.1rem' }}>
+                <strong style={{ fontSize: '.85rem' }}>Header transparente</strong>
+                <small style={{ color: 'var(--muted)', fontSize: '.72rem' }}>Se mezcla con el fondo de página (recomendado)</small>
+              </span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem' }}>
+              {d.headerTransparente === false && (
+                <ColorPicker label="Color de fondo propio" value={d.colorHeaderFondo} onChange={v => set('colorHeaderFondo', v)} />
+              )}
               <ColorPicker label="Color de texto" value={d.colorHeaderTexto} onChange={v => set('colorHeaderTexto', v)} />
             </div>
-            <div style={{ marginBottom: '.7rem' }}>
-              <label style={{ fontSize: '.75rem', color: 'var(--muted2)', fontWeight: 600, display: 'block', marginBottom: '.4rem' }}>Imagen de fondo</label>
-              {fondoPreview && (
-                <div style={{ marginBottom: '.5rem', position: 'relative', display: 'inline-block' }}>
-                  <img src={fondoPreview} alt="fondo" style={{ height: 60, width: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border2)' }} />
-                  <button className="btn danger small" style={{ position: 'absolute', top: -6, right: -6, padding: '.1rem .35rem', fontSize: '.7rem' }}
-                    onClick={() => { setFondoPreview(''); set('fondoUrl', ''); }}>✕</button>
-                </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
-                <input type="file" accept="image/*" onChange={e => handleArchivo(e, 'fondo')} style={{ fontSize: '.78rem', color: 'var(--text2)' }} />
-                <input type="url" placeholder="https://... (URL de imagen)" value={d.fondoUrl?.startsWith('data:') ? '' : (d.fondoUrl || '')}
-                  onChange={e => { set('fondoUrl', e.target.value); setFondoPreview(e.target.value); }}
-                  style={{ fontSize: '.82rem' }} />
-              </div>
-            </div>
-            {(fondoPreview || d.fondoUrl) && (
-              <SliderPicker label="Oscuridad del overlay" hint="Capa oscura sobre la imagen para legibilidad"
-                value={d.fondoOpacidad} onChange={v => set('fondoOpacidad', v)} />
-            )}
           </SeccionDiseno>
 
           <SeccionDiseno titulo="LOGO">
@@ -1826,7 +1873,7 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
               <div>
                 {logoPreview
                   ? <div style={{ position: 'relative', display: 'inline-block' }}>
-                      <img src={logoPreview} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, border: '1px solid var(--border2)', background: d.colorHeaderFondo, padding: 4 }} />
+                      <img src={logoPreview} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, border: '1px solid var(--border2)', background: d.headerTransparente !== false ? d.paginaFondoColor : d.colorHeaderFondo, padding: 4 }} />
                       <button className="btn danger small" style={{ position: 'absolute', top: -6, right: -6, padding: '.1rem .35rem', fontSize: '.7rem' }}
                         onClick={() => { setLogoPreview(''); set('logoUrl', ''); }}>✕</button>
                     </div>
@@ -1878,8 +1925,21 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
       {tab === 'tabs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <SeccionDiseno titulo="BARRA DE NAVEGACIÓN">
+            <label className="check-row" style={{ marginBottom: '.8rem' }}>
+              <input type="checkbox" checked={d.tabsTransparente !== false} onChange={e => set('tabsTransparente', e.target.checked)}
+                style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: '.1rem' }}>
+                <strong style={{ fontSize: '.85rem' }}>Barra transparente</strong>
+                <small style={{ color: 'var(--muted)', fontSize: '.72rem' }}>Se mezcla con el fondo de página (recomendado)</small>
+              </span>
+            </label>
+            <p className="muted" style={{ fontSize: '.72rem', marginBottom: '.8rem' }}>
+              Las pestañas siempre se muestran centradas.
+            </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem' }}>
-              <ColorPicker label="Fondo de la barra" value={d.colorTabFondo} onChange={v => set('colorTabFondo', v)} />
+              {d.tabsTransparente === false && (
+                <ColorPicker label="Fondo de la barra" value={d.colorTabFondo} onChange={v => set('colorTabFondo', v)} />
+              )}
               <ColorPicker label="Texto inactivo" value={d.colorTabTexto} onChange={v => set('colorTabTexto', v)} />
               <ColorPicker label="Color tab activo" value={d.colorTabActivo} onChange={v => set('colorTabActivo', v)} />
               <ColorPicker label="Texto tab activo" value={d.colorTabActivoTexto} onChange={v => set('colorTabActivoTexto', v)} />
@@ -1891,15 +1951,14 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
       {/* ── TABLA ── */}
       {tab === 'tabla' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <SeccionDiseno titulo="FONDO Y ESTRUCTURA">
+          <SeccionDiseno titulo="TARJETA DE LA TABLA">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem', marginBottom: '.8rem' }}>
-              <ColorPicker label="Fondo de la sección" hint="Área detrás de la tabla" value={d.colorContenidoFondo} onChange={v => set('colorContenidoFondo', v)} />
               <ColorPicker label="Fondo de la tabla" hint="Filas del cuerpo" value={d.colorTablaFondo} onChange={v => set('colorTablaFondo', v)} />
               <ColorPicker label="Fondo de encabezados" hint="Fila de títulos (PJ, PG, etc.)" value={d.colorTablaEncabezado} onChange={v => set('colorTablaEncabezado', v)} />
               <ColorPicker label="Color de texto" value={d.colorTablaTexto} onChange={v => set('colorTablaTexto', v)} />
               <ColorPicker label="Texto secundario" hint="PJ, números menores" value={d.colorTablaTextoMuted} onChange={v => set('colorTablaTextoMuted', v)} />
             </div>
-            <SliderPicker label="Transparencia de la tabla" hint="0% = sólido, 100% = completamente transparente"
+            <SliderPicker label="Transparencia (efecto vidrio)" hint="0% = tarjeta sólida · valores altos dejan ver el fondo de página detrás de la tabla, como una tarjeta de cristal"
               value={d.tablaTransparencia} onChange={v => set('tablaTransparencia', v)} />
           </SeccionDiseno>
           <SeccionDiseno titulo="COLORES DE RESULTADOS">
@@ -1949,7 +2008,7 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
           <p className="muted" style={{ fontSize: '.78rem', marginBottom: '1rem' }}>
             Preview en tiempo real — refleja exactamente cómo se verá la vista pública.
           </p>
-          <PreviewVistaPublica liga={liga} d={d} logoPreview={logoPreview} fondoPreview={fondoPreview} />
+          <PreviewVistaPublica liga={liga} d={d} logoPreview={logoPreview} paginaPreview={paginaPreview} />
         </div>
       )}
     </div>
@@ -1957,13 +2016,20 @@ function TabDisenoPublico({ liga, refresh, updateLiga }) {
 }
 
 // ── Preview completo de la vista pública ──────────────────────
-function PreviewVistaPublica({ liga, d, logoPreview, fondoPreview }) {
-  const fondo  = fondoPreview || d.fondoUrl || '';
-  const logo   = logoPreview  || d.logoUrl  || '';
-  const nombre = d.nombrePersonal?.trim() || liga.nombre;
-  const tablaAlpha = Math.round((d.tablaTransparencia || 0) * 2.55).toString(16).padStart(2, '0');
-  const tablaFondo = d.colorTablaFondo + tablaAlpha;
-  const encabFondo = d.colorTablaEncabezado + tablaAlpha;
+function PreviewVistaPublica({ liga, d, logoPreview, paginaPreview }) {
+  const fondoPagina = paginaPreview || d.paginaFondoUrl || '';
+  const logo        = logoPreview   || d.logoUrl        || '';
+  const nombre      = d.nombrePersonal?.trim() || liga.nombre;
+  const overlay     = (d.paginaOverlay ?? 55) / 100;
+
+  const headerTrans = d.headerTransparente !== false;
+  const tabsTrans   = d.tabsTransparente   !== false;
+
+  const transp = d.tablaTransparencia ?? 0;
+  const alpha  = Math.round((100 - transp) * 2.55).toString(16).padStart(2, '0');
+  const tablaFondo = d.colorTablaFondo + alpha;
+  const encabFondo = d.colorTablaEncabezado + alpha;
+  const usaBlur = transp > 0 && transp < 100;
 
   return (
     <div style={{
@@ -1971,84 +2037,96 @@ function PreviewVistaPublica({ liga, d, logoPreview, fondoPreview }) {
       overflow: 'hidden', maxWidth: 500, margin: '0 auto',
       fontFamily: d.fuente !== 'Inter' ? `'${d.fuente}', sans-serif` : 'inherit',
       boxShadow: '0 8px 32px rgba(0,0,0,.4)',
+      position: 'relative',
+      background: fondoPagina ? `url(${fondoPagina}) center/cover no-repeat` : d.paginaFondoColor,
     }}>
-      {/* Header */}
-      <div style={{
-        background: fondo ? `url(${fondo}) center/cover no-repeat` : d.colorHeaderFondo,
-        padding: '1.4rem 1.2rem', position: 'relative',
-      }}>
-        {fondo && (
-          <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${(d.fondoOpacidad || 60) / 100})` }} />
-        )}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '.9rem' }}>
-          {d.mostrarLogo !== false && (
-            logo
-              ? <img src={logo} alt="logo" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: 'rgba(255,255,255,.08)', padding: 4, flexShrink: 0 }} />
-              : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0 }}>🏐</div>
-          )}
-          <div>
-            {d.mostrarNombre !== false && (
-              <div style={{ fontWeight: 900, fontSize: '1.15rem', color: d.colorHeaderTexto, letterSpacing: '-.02em', lineHeight: 1.2 }}>
-                {nombre}
-              </div>
+      {fondoPagina && (
+        <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${overlay})` }} />
+      )}
+
+      <div style={{ position: 'relative' }}>
+        {/* Header */}
+        <div style={{
+          background: headerTrans ? 'transparent' : d.colorHeaderFondo,
+          padding: '1.4rem 1.2rem 1rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.9rem', justifyContent: 'center', textAlign: 'left' }}>
+            {d.mostrarLogo !== false && (
+              logo
+                ? <img src={logo} alt="logo" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: 'rgba(255,255,255,.08)', padding: 4, flexShrink: 0 }} />
+                : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0 }}>🏐</div>
             )}
-            {d.slogan && (
-              <div style={{ fontSize: '.78rem', color: d.colorHeaderTexto + 'bb', marginTop: '.15rem' }}>{d.slogan}</div>
-            )}
-            {d.mostrarCodigo !== false && (
-              <code style={{ fontSize: '.7rem', color: d.colorPrimario, fontFamily: 'monospace', letterSpacing: '.06em', marginTop: '.2rem', display: 'block' }}>
-                {liga.alias || liga.codigo}
-              </code>
-            )}
+            <div>
+              {d.mostrarNombre !== false && (
+                <div style={{ fontWeight: 900, fontSize: '1.15rem', color: d.colorHeaderTexto, letterSpacing: '-.02em', lineHeight: 1.2 }}>
+                  {nombre}
+                </div>
+              )}
+              {d.slogan && (
+                <div style={{ fontSize: '.78rem', color: d.colorHeaderTexto + 'bb', marginTop: '.15rem' }}>{d.slogan}</div>
+              )}
+              {d.mostrarCodigo !== false && (
+                <code style={{ fontSize: '.7rem', color: d.colorPrimario, fontFamily: 'monospace', letterSpacing: '.06em', marginTop: '.2rem', display: 'block' }}>
+                  {liga.alias || liga.codigo}
+                </code>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div style={{ background: d.colorTabFondo, display: 'flex', gap: '.2rem', padding: '.4rem .6rem', overflowX: 'auto' }}>
-        {['Tabla', 'Resultados', 'Programación', '🏆 Playoffs'].map((t, i) => (
-          <div key={t} style={{
-            padding: '.32rem .75rem', borderRadius: 7, fontSize: '.76rem', fontWeight: 700,
-            background: i === 0 ? d.colorTabActivo : 'transparent',
-            color: i === 0 ? d.colorTabActivoTexto : d.colorTabTexto,
-            whiteSpace: 'nowrap', flexShrink: 0,
-          }}>{t}</div>
-        ))}
-      </div>
+        {/* Tabs — centradas */}
+        <div style={{
+          background: tabsTrans ? 'transparent' : d.colorTabFondo,
+          display: 'flex', gap: '.2rem', padding: '.5rem .6rem', justifyContent: 'center',
+        }}>
+          {['Tabla', 'Resultados', 'Programación', '🏆 Playoffs'].map((t, i) => (
+            <div key={t} style={{
+              padding: '.32rem .75rem', borderRadius: 7, fontSize: '.76rem', fontWeight: 700,
+              background: i === 0 ? d.colorTabActivo : 'transparent',
+              color: i === 0 ? d.colorTabActivoTexto : d.colorTabTexto,
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>{t}</div>
+          ))}
+        </div>
 
-      {/* Contenido — tabla */}
-      <div style={{ background: d.colorContenidoFondo, padding: '.9rem' }}>
-        <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${d.colorPrimario}33` }}>
-          {/* Encabezados */}
-          <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px', background: encabFondo }}>
-            {['#','Equipo','PJ','PG','PP','PTS'].map(h => (
-              <div key={h} style={{ padding: '.45rem .5rem', fontSize: '.65rem', fontWeight: 800, color: d.colorTablaTextoMuted, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${d.colorPrimario}22`, textAlign: h !== 'Equipo' ? 'center' : 'left' }}>
-                {h}
+        {/* Contenido — tabla con efecto glass */}
+        <div style={{ padding: '.9rem 1rem 1.2rem' }}>
+          <div style={{
+            borderRadius: 10, overflow: 'hidden',
+            background: tablaFondo,
+            backdropFilter: usaBlur ? 'blur(10px)' : undefined,
+            WebkitBackdropFilter: usaBlur ? 'blur(10px)' : undefined,
+            boxShadow: transp < 100 ? '0 8px 24px rgba(0,0,0,.3)' : undefined,
+          }}>
+            {/* Encabezados */}
+            <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px', background: encabFondo }}>
+              {['#','Equipo','PJ','PG','PP','PTS'].map(h => (
+                <div key={h} style={{ padding: '.45rem .5rem', fontSize: '.65rem', fontWeight: 800, color: d.colorTablaTextoMuted, textTransform: 'uppercase', letterSpacing: '.07em', textAlign: h !== 'Equipo' ? 'center' : 'left' }}>
+                  {h}
+                </div>
+              ))}
+            </div>
+            {/* Filas de ejemplo */}
+            {[
+              { pos: '🥇', nom: 'Cuervos',   pj: 6, pg: 5, pp: 1, pts: 10 },
+              { pos: '🥈', nom: 'Lagos',     pj: 6, pg: 4, pp: 2, pts: 8  },
+              { pos: '🥉', nom: 'Halcones',  pj: 6, pg: 3, pp: 3, pts: 6  },
+              { pos: '4',  nom: 'Panteras',  pj: 6, pg: 2, pp: 4, pts: 4  },
+            ].map((r, i) => (
+              <div key={r.nom} style={{
+                display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px',
+                background: i === 0 ? `${d.colorPrimario}18` : 'transparent',
+                borderTop: `1px solid ${d.colorPrimario}11`,
+              }}>
+                <div style={{ padding: '.42rem .3rem', fontSize: '.78rem', textAlign: 'center', color: d.colorTablaTexto }}>{r.pos}</div>
+                <div style={{ padding: '.42rem .5rem', fontSize: '.82rem', fontWeight: 600, color: d.colorTablaTexto }}>{r.nom}</div>
+                <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorTablaTextoMuted, textAlign: 'center' }}>{r.pj}</div>
+                <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorVictoria, textAlign: 'center', fontWeight: 700 }}>{r.pg}</div>
+                <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorDerrota, textAlign: 'center', fontWeight: 700 }}>{r.pp}</div>
+                <div style={{ padding: '.42rem .3rem', fontSize: '.88rem', color: d.colorPrimario, textAlign: 'center', fontWeight: 900 }}>{r.pts}</div>
               </div>
             ))}
           </div>
-          {/* Filas de ejemplo */}
-          {[
-            { pos: '🥇', nom: 'Cuervos',   pj: 6, pg: 5, pp: 1, pts: 10 },
-            { pos: '🥈', nom: 'Lagos',     pj: 6, pg: 4, pp: 2, pts: 8  },
-            { pos: '🥉', nom: 'Halcones',  pj: 6, pg: 3, pp: 3, pts: 6  },
-            { pos: '4',  nom: 'Panteras',  pj: 6, pg: 2, pp: 4, pts: 4  },
-          ].map((r, i) => (
-            <div key={r.nom} style={{
-              display: 'grid', gridTemplateColumns: '28px 1fr 40px 40px 40px 50px',
-              background: i === 0
-                ? `${d.colorPrimario}18`
-                : `${d.colorTablaFondo}${(255 - Math.round(d.tablaTransparencia * 2.55)).toString(16).padStart(2,'0')}`,
-              borderBottom: i < 3 ? `1px solid ${d.colorPrimario}11` : 'none',
-            }}>
-              <div style={{ padding: '.42rem .3rem', fontSize: '.78rem', textAlign: 'center', color: d.colorTablaTexto }}>{r.pos}</div>
-              <div style={{ padding: '.42rem .5rem', fontSize: '.82rem', fontWeight: 600, color: d.colorTablaTexto }}>{r.nom}</div>
-              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorTablaTextoMuted, textAlign: 'center' }}>{r.pj}</div>
-              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorVictoria, textAlign: 'center', fontWeight: 700 }}>{r.pg}</div>
-              <div style={{ padding: '.42rem .3rem', fontSize: '.8rem', color: d.colorDerrota, textAlign: 'center', fontWeight: 700 }}>{r.pp}</div>
-              <div style={{ padding: '.42rem .3rem', fontSize: '.88rem', color: d.colorPrimario, textAlign: 'center', fontWeight: 900 }}>{r.pts}</div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
