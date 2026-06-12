@@ -71,17 +71,35 @@ function PublicViewApp({ codigoInicial }) {
 
   useEffect(() => { if (codigoInicial) cargarLiga(codigoInicial); }, [codigoInicial, cargarLiga]);
 
+  // La liga tiene diseño personalizado si tiene al menos un campo configurado
+  const tieneDiseno = !!(datos?.liga?.config?.diseno && Object.keys(datos.liga.config.diseno).length > 0);
+
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-left">
-          <span className="topbar-logo">🏐</span>
-          <span className="topbar-title">{datos?.liga?.nombre || 'Liga Voleibol'}</span>
-        </div>
-        <div className="topbar-right">
-          <button className="btn secondary small" onClick={irALogin}>Iniciar sesión</button>
-        </div>
-      </header>
+    <div className="app-shell" style={tieneDiseno ? { background: 'transparent' } : {}}>
+      {tieneDiseno ? (
+        // Liga con diseño personalizado: LigaPublicaView ya muestra logo y nombre
+        // en su propio header, así que aquí solo dejamos un botón flotante y
+        // transparente para no duplicar el nombre de la liga.
+        <header className="topbar" style={{
+          background: 'transparent', border: 'none', boxShadow: 'none',
+          position: 'absolute', top: 0, right: 0, left: 'auto', width: 'auto',
+          padding: '.8rem 1rem', zIndex: 5,
+        }}>
+          <div className="topbar-right">
+            <button className="btn secondary small" onClick={irALogin}>Iniciar sesión</button>
+          </div>
+        </header>
+      ) : (
+        <header className="topbar">
+          <div className="topbar-left">
+            <span className="topbar-logo">🏐</span>
+            <span className="topbar-title">{datos?.liga?.nombre || 'Liga Voleibol'}</span>
+          </div>
+          <div className="topbar-right">
+            <button className="btn secondary small" onClick={irALogin}>Iniciar sesión</button>
+          </div>
+        </header>
+      )}
       {estado === 'cargando' && <div className="loading-spinner" style={{ margin: '4rem auto' }} />}
       {estado === 'buscador' && <Buscador codigo={codigo} onChange={setCodigo} onBuscar={() => cargarLiga(codigo)} error={error} />}
       {estado === 'liga' && datos && (
