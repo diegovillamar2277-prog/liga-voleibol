@@ -7,23 +7,10 @@ import { formatFecha } from '../lib/ui.js';
 import { sb } from '../lib/supabase.js';
 import PlayoffsPublico from './PlayoffsPublico.jsx';
 
-// ── Aplica el diseño de la liga al DOM via CSS vars ──────────
+// ── Aplica fuente personalizada al DOM ───────────────────────
 function useDiseno(diseno) {
   useEffect(() => {
     if (!diseno || Object.keys(diseno).length === 0) return;
-    const root = document.documentElement;
-
-    // Colores principales
-    if (diseno.colorPrimario)       root.style.setProperty('--dp-primario',         diseno.colorPrimario);
-    if (diseno.colorContenidoFondo) root.style.setProperty('--dp-contenido-fondo',  diseno.colorContenidoFondo);
-    if (diseno.colorTablaFondo)     root.style.setProperty('--dp-tabla-fondo',       diseno.colorTablaFondo);
-    if (diseno.colorTablaEncabezado)root.style.setProperty('--dp-tabla-encab',       diseno.colorTablaEncabezado);
-    if (diseno.colorTablaTexto)     root.style.setProperty('--dp-tabla-texto',       diseno.colorTablaTexto);
-    if (diseno.colorTablaTextoMuted)root.style.setProperty('--dp-tabla-muted',       diseno.colorTablaTextoMuted);
-    if (diseno.colorVictoria)       root.style.setProperty('--dp-victoria',          diseno.colorVictoria);
-    if (diseno.colorDerrota)        root.style.setProperty('--dp-derrota',           diseno.colorDerrota);
-
-    // Fuente personalizada
     if (diseno.fuente && diseno.fuente !== 'Inter') {
       const id = 'gf-custom';
       if (!document.getElementById(id)) {
@@ -35,66 +22,76 @@ function useDiseno(diseno) {
       }
       document.body.style.fontFamily = `'${diseno.fuente}', sans-serif`;
     }
-
-    return () => {
-      ['--dp-primario','--dp-contenido-fondo','--dp-tabla-fondo','--dp-tabla-encab',
-       '--dp-tabla-texto','--dp-tabla-muted','--dp-victoria','--dp-derrota'].forEach(v =>
-        root.style.removeProperty(v)
-      );
-      document.body.style.fontFamily = '';
-    };
+    return () => { document.body.style.fontFamily = ''; };
   }, [diseno]);
+}
+
+// ── Fondo de página completo (imagen o color + overlay) ──────
+function FondoPagina({ diseno }) {
+  const d = diseno || {};
+  const img      = d.paginaFondoUrl || '';
+  const overlay  = (d.paginaOverlay ?? 55) / 100;
+  const fijo     = d.paginaFondoFijo !== false;
+
+  return (
+    <div aria-hidden="true" style={{
+      position: fijo ? 'fixed' : 'absolute',
+      inset: 0, zIndex: -1,
+      background: img ? `url(${img}) center/cover no-repeat` : (d.paginaFondoColor || '#080f1e'),
+    }}>
+      {img && (
+        <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${overlay})` }} />
+      )}
+    </div>
+  );
 }
 
 // ── Header personalizado ────────────────────────────────────
 function HeaderPublico({ liga, diseno }) {
   const d      = diseno || {};
-  const fondo  = d.fondoUrl  || '';
   const logo   = d.logoUrl   || '';
   const nombre = d.nombrePersonal?.trim() || liga.nombre;
-  const opacidad = (d.fondoOpacidad ?? 60) / 100;
+  const transparente = d.headerTransparente !== false;
 
   return (
     <div style={{
-      background: fondo ? `url(${fondo}) center/cover no-repeat` : (d.colorHeaderFondo || '#080f1e'),
-      padding: '1.5rem 1.4rem',
+      background: transparente ? 'transparent' : (d.colorHeaderFondo || '#080f1e'),
+      padding: '1.6rem 1.4rem',
       position: 'relative',
-      borderBottom: `2px solid ${(d.colorPrimario || '#f59e0b')}44`,
     }}>
-      {fondo && (
-        <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${opacidad})` }} />
-      )}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', maxWidth: 880, margin: '0 auto' }}>
-        {d.mostrarLogo !== false && (
-          logo
-            ? <img src={logo} alt="logo" style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 10, background: 'rgba(255,255,255,.08)', padding: 4, flexShrink: 0 }} />
-            : <span style={{ fontSize: '2.5rem', flexShrink: 0 }}>🏐</span>
-        )}
-        <div>
-          {d.mostrarNombre !== false && (
-            <h1 style={{
-              margin: 0, fontWeight: 900, fontSize: '1.4rem', letterSpacing: '-.03em',
-              color: d.colorHeaderTexto || '#fff',
-              fontFamily: d.fuente && d.fuente !== 'Inter' ? `'${d.fuente}', sans-serif` : 'inherit',
-              lineHeight: 1.2,
-            }}>
-              {nombre}
-            </h1>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', maxWidth: 880, margin: '0 auto', justifyContent: 'center', textAlign: 'center', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexDirection: 'row' }}>
+          {d.mostrarLogo !== false && (
+            logo
+              ? <img src={logo} alt="logo" style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 10, background: 'rgba(255,255,255,.08)', padding: 4, flexShrink: 0 }} />
+              : <span style={{ fontSize: '2.5rem', flexShrink: 0 }}>🏐</span>
           )}
-          {d.slogan && (
-            <div style={{ fontSize: '.8rem', color: (d.colorHeaderTexto || '#fff') + 'bb', marginTop: '.15rem' }}>
-              {d.slogan}
-            </div>
-          )}
-          {d.mostrarCodigo !== false && (
-            <code style={{
-              display: 'block', fontSize: '.72rem', marginTop: '.25rem',
-              color: d.colorPrimario || 'var(--accent)',
-              fontFamily: 'monospace', letterSpacing: '.06em',
-            }}>
-              {liga.alias || liga.codigo}
-            </code>
-          )}
+          <div style={{ textAlign: 'left' }}>
+            {d.mostrarNombre !== false && (
+              <h1 style={{
+                margin: 0, fontWeight: 900, fontSize: '1.4rem', letterSpacing: '-.03em',
+                color: d.colorHeaderTexto || '#fff',
+                fontFamily: d.fuente && d.fuente !== 'Inter' ? `'${d.fuente}', sans-serif` : 'inherit',
+                lineHeight: 1.2,
+              }}>
+                {nombre}
+              </h1>
+            )}
+            {d.slogan && (
+              <div style={{ fontSize: '.8rem', color: (d.colorHeaderTexto || '#fff') + 'bb', marginTop: '.15rem' }}>
+                {d.slogan}
+              </div>
+            )}
+            {d.mostrarCodigo !== false && (
+              <code style={{
+                display: 'block', fontSize: '.72rem', marginTop: '.25rem',
+                color: d.colorPrimario || 'var(--accent)',
+                fontFamily: 'monospace', letterSpacing: '.06em',
+              }}>
+                {liga.alias || liga.codigo}
+              </code>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -104,8 +101,13 @@ function HeaderPublico({ liga, diseno }) {
 // ── Tab Nav ──────────────────────────────────────────────────
 function TabNav({ tabs, activeTab, onTabChange, diseno }) {
   const d = diseno || {};
+  const transparente = d.tabsTransparente !== false;
   return (
-    <nav className="tab-nav" style={d.colorTabFondo ? { background: d.colorTabFondo } : {}}>
+    <nav className="tab-nav" style={{
+      justifyContent: 'center',
+      background: transparente ? 'transparent' : (d.colorTabFondo || undefined),
+      boxShadow: transparente ? 'none' : undefined,
+    }}>
       {tabs.map(tab => {
         const esActivo = activeTab === tab.id;
         return (
@@ -139,23 +141,28 @@ function TablaPublica({ equipos = [], partidos = [], cfg = {}, diseno = {} }) {
   const tabla     = calcularTabla(equipos, partidos, cfg);
 
   const d = diseno;
-  const alpha = d.tablaTransparencia
-    ? Math.round((100 - d.tablaTransparencia) * 2.55).toString(16).padStart(2, '0')
-    : '';
-  const tablaFondo = d.colorTablaFondo     ? (d.colorTablaFondo     + alpha) : undefined;
-  const encabFondo = d.colorTablaEncabezado? (d.colorTablaEncabezado + alpha) : undefined;
+  // tablaTransparencia: 0 = tarjeta sólida, 100 = completamente transparente (solo fondo de página)
+  const transp = d.tablaTransparencia ?? 0;
+  const alpha  = Math.round((100 - transp) * 2.55).toString(16).padStart(2, '0');
+  const tablaFondo = d.colorTablaFondo      ? (d.colorTablaFondo      + alpha) : undefined;
+  const encabFondo = d.colorTablaEncabezado ? (d.colorTablaEncabezado + alpha) : undefined;
   const colorTexto       = d.colorTablaTexto       || undefined;
   const colorTextoMuted  = d.colorTablaTextoMuted  || undefined;
   const colorPrimario    = d.colorPrimario          || undefined;
   const colorVictoria    = d.colorVictoria          || undefined;
   const colorDerrota     = d.colorDerrota           || undefined;
-  const fondoContenido   = d.colorContenidoFondo    || undefined;
+  const usaBlur = transp > 0 && transp < 100;
 
   if (!tabla.length) return <p className="empty">Aún no hay equipos registrados.</p>;
 
   return (
-    <div className="tabla-wrap" style={fondoContenido ? { background: fondoContenido } : {}}>
-      <table className="tabla-pos" style={tablaFondo ? { background: tablaFondo } : {}}>
+    <div className="tabla-wrap" style={{ background: 'transparent' }}>
+      <table className="tabla-pos" style={{
+        background: tablaFondo,
+        backdropFilter: usaBlur ? 'blur(10px)' : undefined,
+        WebkitBackdropFilter: usaBlur ? 'blur(10px)' : undefined,
+        boxShadow: transp < 100 ? '0 8px 32px rgba(0,0,0,.35)' : undefined,
+      }}>
         <thead style={encabFondo ? { background: encabFondo } : {}}>
           <tr>
             <th style={colorTextoMuted ? { color: colorTextoMuted } : {}}>#</th>
@@ -441,6 +448,9 @@ export default function LigaPublicaView({ liga, equipos = [], partidos = [], bra
 
   return (
     <>
+      {/* Fondo de página completo — imagen o color */}
+      {tieneDiseno && <FondoPagina diseno={diseno} />}
+
       {/* Header personalizado — siempre si hay diseño */}
       {tieneDiseno && <HeaderPublico liga={liga} diseno={diseno} />}
 
@@ -477,7 +487,7 @@ export default function LigaPublicaView({ liga, equipos = [], partidos = [], bra
         </div>
       )}
 
-      <section className="section" style={tieneDiseno && diseno.colorContenidoFondo ? { background: diseno.colorContenidoFondo } : {}}>
+      <section className="section" style={tieneDiseno ? { background: 'transparent' } : {}}>
         {activeTab === 'playoffs'     && <PlayoffsPublico bracket={bracket} cfg={cfg} />}
         {activeTab === 'tabla'        && <TablaPublica    equipos={equipos} partidos={partidos} cfg={cfg} diseno={diseno} />}
         {activeTab === 'programacion' && <Programacion />}
