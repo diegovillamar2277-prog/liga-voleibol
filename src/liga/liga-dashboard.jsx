@@ -635,17 +635,23 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
                 const sA = p ? (invertido ? p.sets_b : p.sets_a) : null;
                 const sB = p ? (invertido ? p.sets_a : p.sets_b) : null;
                 const ganoA = p?.jugado && (invertido ? p.ganador === 'B' : p.ganador === 'A');
-                const ganoB = p?.jugado && (invertido ? p.ganador === 'A' : p.ganador === 'B');
+
+                // El ganador siempre se muestra a la izquierda.
+                const izq      = p?.jugado ? (ganoA ? eA : eB) : eA;
+                const der      = p?.jugado ? (ganoA ? eB : eA) : eB;
+                const scoreIzq = p?.jugado ? (ganoA ? sA : sB) : null;
+                const scoreDer = p?.jugado ? (ganoA ? sB : sA) : null;
+
                 return (
                   <div key={i} className={'fixture-item ' + (p?.jugado ? 'jugado' : '')}>
                     <span className={'badge ' + (v === 1 ? 'pending' : 'done')}>V{v}</span>
                     <div className="fixture-teams">
-                      <span className={ganoA ? 'team-win' : ''}>{eA}</span>
-                      <span className="fixture-vs">{p?.jugado ? sA + ':' + sB : 'vs'}</span>
-                      <span className={ganoB ? 'team-win' : ''}>{eB}</span>
+                      <span className={p?.jugado ? 'team-win' : ''}>{izq}</span>
+                      <span className="fixture-vs">{p?.jugado ? scoreIzq + ':' + scoreDer : 'vs'}</span>
+                      <span>{der}</span>
                     </div>
                     {p?.fecha && <span className="fixture-date">{formatFecha(p.fecha)}</span>}
-                    {p?.jugado && <span className="badge win">🏆 {ganoA ? eA : eB}</span>}
+                    {p?.jugado && <span className="badge win">🏆 {izq}</span>}
                   </div>
                 );
               })}
