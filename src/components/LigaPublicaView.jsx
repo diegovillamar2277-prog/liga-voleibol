@@ -264,6 +264,22 @@ function Programacion() {
 const MAX_PALABRAS = 200;
 function contarPalabras(t) { return t.trim().split(/\s+/).filter(Boolean).length; }
 
+// Esta vista es pública (sin login): cualquiera con el link puede mandar
+// quejas/sugerencias. Sin límite, un bot o alguien enojado puede saturar
+// la tabla `comentarios` de una liga con cientos de envíos. No hay backend
+// propio para un rate-limit real por IP, así que ponemos un enfriamiento
+// simple por navegador (localStorage) — no detiene a un atacante decidido,
+// pero sí el caso común de "recargar y volver a mandar" en bucle.
+const COOLDOWN_MS = 20000;
+function cooldownKey(ligaId, tipo) { return `comentario_cd_${ligaId}_${tipo}`; }
+function enCooldown(ligaId, tipo) {
+  const last = Number(localStorage.getItem(cooldownKey(ligaId, tipo)) || 0);
+  return Date.now() - last < COOLDOWN_MS;
+}
+function marcarEnviado(ligaId, tipo) {
+  localStorage.setItem(cooldownKey(ligaId, tipo), String(Date.now()));
+}
+
 function FormQueja({ ligaId, onEnviado }) {
   const [autor, setAutor]             = useState('');
   const [equipo, setEquipo]           = useState('');
@@ -274,6 +290,8 @@ function FormQueja({ ligaId, onEnviado }) {
 
   const enviar = async e => {
     e.preventDefault();
+    if (enviando) return;
+    if (enCooldown(ligaId, 'queja')) { setError('Espera unos segundos antes de enviar otra queja.'); return; }
     if (!descripcion.trim()) { setError('La descripción es obligatoria.'); return; }
     if (!mensaje.trim())     { setError('El detalle es obligatorio.'); return; }
     setError(''); setEnviando(true);
@@ -286,6 +304,7 @@ function FormQueja({ ligaId, onEnviado }) {
         mensaje: mensaje.trim(),
       });
       if (err) throw err;
+      marcarEnviado(ligaId, 'queja');
       setAutor(''); setEquipo(''); setDescripcion(''); setMensaje('');
       onEnviado();
     } catch { setError('No se pudo enviar. Intenta de nuevo.'); }
@@ -331,6 +350,8 @@ function FormSugerencia({ ligaId, onEnviado }) {
 
   const enviar = async e => {
     e.preventDefault();
+    if (enviando) return;
+    if (enCooldown(ligaId, 'sugerencia')) { setError('Espera unos segundos antes de enviar otra sugerencia.'); return; }
     if (!mensaje.trim()) { setError('Escribe tu sugerencia.'); return; }
     if (excede) { setError(`Máximo ${MAX_PALABRAS} palabras.`); return; }
     setError(''); setEnviando(true);
@@ -341,6 +362,7 @@ function FormSugerencia({ ligaId, onEnviado }) {
         mensaje: mensaje.trim(),
       });
       if (err) throw err;
+      marcarEnviado(ligaId, 'sugerencia');
       setAutor(''); setMensaje(''); onEnviado();
     } catch { setError('No se pudo enviar. Intenta de nuevo.'); }
     finally { setEnviando(false); }

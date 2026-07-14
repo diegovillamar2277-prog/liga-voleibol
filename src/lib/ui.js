@@ -16,7 +16,7 @@ export function showLoading(msg = 'Cargando…') {
   el = document.createElement('div');
   el.id = 'global-loading';
   el.style.cssText = 'display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:1rem';
-  el.innerHTML = '<div class="spinner"></div><p class="muted">' + msg + '</p>';
+  el.innerHTML = '<div class="spinner"></div><p class="muted">' + esc(msg) + '</p>';
   document.body.appendChild(el);
 }
 

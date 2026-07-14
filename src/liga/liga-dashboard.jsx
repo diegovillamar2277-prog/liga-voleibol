@@ -210,6 +210,8 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
   const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(true);
   const [mostrarPago, setMostrarPago] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [enviandoPeticion, setEnviandoPeticion] = useState(false);
 
   useEffect(() => {
     contarLigasDeUsuario(perfil.id).then(n => {
@@ -221,7 +223,8 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
 
   const enviar = async e => {
     e.preventDefault();
-    setError('');
+    if (creando) return;
+    setError(''); setCreando(true);
     try {
       const liga = await crearLiga({
         nombre,
@@ -235,17 +238,23 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
       onCreada(liga);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setCreando(false);
     }
   };
 
   const enviarPeticion_ = async e => {
     e.preventDefault();
+    if (enviandoPeticion) return;
     if (!mensaje.trim()) { toast('Escribe un mensaje', 'error'); return; }
+    setEnviandoPeticion(true);
     try {
       await enviarPeticion(perfil.id, mensaje);
       toast('Petición enviada ✓');
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setEnviandoPeticion(false);
     }
   };
 
@@ -299,7 +308,9 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
                   value={mensaje}
                   onChange={e => setMensaje(e.target.value)}
                 />
-                <button type="submit" className="btn" style={{ marginTop: '.6rem' }}>Enviar petición</button>
+                <button type="submit" className="btn" style={{ marginTop: '.6rem' }} disabled={enviandoPeticion}>
+                  {enviandoPeticion ? 'Enviando…' : 'Enviar petición'}
+                </button>
               </form>
             </>
           )}
@@ -343,7 +354,7 @@ function FormCrearLiga({ perfil, onCreada, onCancelar }) {
         </div>
         {error && <div className="auth-error">{error}</div>}
         <div className="flex" style={{ gap: '.6rem', marginTop: '1rem' }}>
-          <button type="submit" className="btn">Crear liga</button>
+          <button type="submit" className="btn" disabled={creando}>{creando ? 'Creando…' : 'Crear liga'}</button>
           <button type="button" className="btn secondary" onClick={onCancelar}>Cancelar</button>
         </div>
       </form>
@@ -684,9 +695,15 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
   const [eqB,       setEqB]       = useState('');
   const [ganSimple, setGanSimple] = useState('');
   const [sets,      setSets]      = useState(() => reglas.map(() => ({ a: '', b: '' })));
+  const [guardando, setGuardando] = useState(false);
 
   const handleSubmit = async e => {
     e.preventDefault();
+    // Sin este guard, un doble clic dispara el submit dos veces antes de que
+    // el primer partido termine de guardarse y refresque `partidos` — el
+    // chequeo de "ya existe este partido" no lo detecta a tiempo y se crean
+    // dos partidos duplicados.
+    if (guardando) return;
     if (!eqA || !eqB) { toast('Selecciona ambos equipos', 'error'); return; }
     if (eqA === eqB)  { toast('Los equipos deben ser diferentes', 'error'); return; }
     if (!fecha)       { toast('La fecha es obligatoria', 'error'); return; }
@@ -710,6 +727,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
     );
     if (existe) { toast('Ya existe este partido en esa vuelta', 'error'); return; }
 
+    setGuardando(true);
     try {
       const precioArb   = liga.config?.precioArbitraje ?? 120;
       const equipoAData = equipos.find(e => e.nombre === eqA);
@@ -745,6 +763,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
       setSets(reglas.map(() => ({ a: '', b: '' })));
       refresh();
     } catch (err) { toast(err.message, 'error'); }
+    finally { setGuardando(false); }
   };
 
   const eliminar = async id => {
@@ -843,7 +862,7 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
             )}
           </div>
           <div className="flex mt1">
-            <button type="submit" className="btn">Guardar partido</button>
+            <button type="submit" className="btn" disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar partido'}</button>
             <button type="reset" className="btn secondary"
               onClick={() => { setFecha(''); setEqA(''); setEqB(''); setGanSimple(''); setSets(reglas.map(() => ({ a: '', b: '' }))); }}>
               Limpiar
@@ -1076,8 +1095,9 @@ export function TabFinanzas({ liga, equipos = [], partidos = [], refresh }) {
 }
 
 function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
-  const [open,  setOpen]  = useState(false);
-  const [monto, setMonto] = useState('');
+  const [open,       setOpen]       = useState(false);
+  const [monto,      setMonto]      = useState('');
+  const [procesando, setProcesando] = useState(false);
 
   const norm = partidos.filter(p => !p.es_playoff && p.jugado);
 
@@ -1096,17 +1116,27 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   // pagos casi simultáneos (o un doble clic) podían leer el mismo saldo y
   // pisarse al guardar, perdiendo dinero. El servidor ahora hace todo
   // (sumar, cubrir partidos pendientes en orden de fecha, guardar el
-  // resto) en una sola transacción atómica.
+  // resto) en una sola transacción atómica. Eso evita que se pisen, pero
+  // no evita que un doble clic dispare la MISMA acción dos veces (p.ej.
+  // sumar $100 dos veces) — por eso además bloqueamos el botón mientras
+  // hay una petición en curso.
   const confirmar_ = async () => {
+    if (procesando) return;
     const m = parseInt(monto);
     if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
-    const { resto } = await aplicarPagoArbitraje(eq.id, m, precioA);
-    const extra = resto > 0 ? ' — Saldo a favor: $' + resto.toLocaleString('es-MX') : '';
-    toast('$' + m.toLocaleString('es-MX') + ' registrado' + extra);
-    setOpen(false); setMonto(''); refresh();
+    setProcesando(true);
+    try {
+      const { resto } = await aplicarPagoArbitraje(eq.id, m, precioA);
+      const extra = resto > 0 ? ' — Saldo a favor: $' + resto.toLocaleString('es-MX') : '';
+      toast('$' + m.toLocaleString('es-MX') + ' registrado' + extra);
+      setOpen(false); setMonto(''); refresh();
+    } finally { setProcesando(false); }
   };
 
   const aplicarSaldo = async () => {
+    if (procesando) return;
+    setProcesando(true);
+    try {
     const { cubiertos, resto } = await aplicarPagoArbitraje(eq.id, 0, precioA);
     if (cubiertos > 0) {
       const pl = cubiertos !== 1;
@@ -1116,6 +1146,7 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
       toast('Saldo insuficiente para cubrir un arbitraje completo', 'error');
     }
     refresh();
+    } finally { setProcesando(false); }
   };
 
   const alCorriente      = jugPend === 0 && saldo === 0;
@@ -1151,8 +1182,8 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', flexShrink: 0 }}>
           {puedeAplicarSaldo && (
-            <button className="btn" style={{ fontSize: '.8rem' }} onClick={aplicarSaldo}>
-              Aplicar saldo
+            <button className="btn" style={{ fontSize: '.8rem' }} onClick={aplicarSaldo} disabled={procesando}>
+              {procesando ? 'Procesando…' : 'Aplicar saldo'}
             </button>
           )}
           <button className="btn secondary" style={{ fontSize: '.8rem' }} onClick={() => setOpen(o => !o)}>
@@ -1166,7 +1197,9 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
             style={{ width: 110, padding: '.3rem .5rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
             value={monto} onChange={e => setMonto(e.target.value)}
             placeholder={String(pendienteNeto > 0 ? pendienteNeto : precioA)} />
-          <button className="btn" style={{ fontSize: '.8rem' }} onClick={confirmar_}>Confirmar</button>
+          <button className="btn" style={{ fontSize: '.8rem' }} onClick={confirmar_} disabled={procesando}>
+            {procesando ? 'Procesando…' : 'Confirmar'}
+          </button>
           <button className="btn secondary" style={{ fontSize: '.8rem' }} onClick={() => setOpen(false)}>Cancelar</button>
           <p className="muted" style={{ fontSize: '.74rem', marginTop: '.3rem', width: '100%' }}>
             El sobrante queda como saldo a favor de <strong>{eq.nombre}</strong>.
