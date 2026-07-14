@@ -626,18 +626,29 @@ export function TabFixture({ liga, equipos = [], partidos = [] }) {
               )}
             </h3>
             <div className="fixture-list">
-              {ordenados.map(({ eA, eB, p, i }) => (
-                <div key={i} className={'fixture-item ' + (p?.jugado ? 'jugado' : '')}>
-                  <span className={'badge ' + (v === 1 ? 'pending' : 'done')}>V{v}</span>
-                  <div className="fixture-teams">
-                    <span className={p?.ganador === 'A' ? 'team-win' : ''}>{eA}</span>
-                    <span className="fixture-vs">{p?.jugado ? p.sets_a + ':' + p.sets_b : 'vs'}</span>
-                    <span className={p?.ganador === 'B' ? 'team-win' : ''}>{eB}</span>
+              {ordenados.map(({ eA, eB, p, i }) => {
+                // p.equipo_a/p.equipo_b pueden estar en orden inverso al de eA/eB
+                // (el usuario elige libremente quién es "Equipo A" al registrar).
+                // Hay que resolver el resultado contra los nombres reales del partido,
+                // no contra la posición que le asignó el generador de fixture.
+                const invertido = p && p.equipo_a === eB;
+                const sA = p ? (invertido ? p.sets_b : p.sets_a) : null;
+                const sB = p ? (invertido ? p.sets_a : p.sets_b) : null;
+                const ganoA = p?.jugado && (invertido ? p.ganador === 'B' : p.ganador === 'A');
+                const ganoB = p?.jugado && (invertido ? p.ganador === 'A' : p.ganador === 'B');
+                return (
+                  <div key={i} className={'fixture-item ' + (p?.jugado ? 'jugado' : '')}>
+                    <span className={'badge ' + (v === 1 ? 'pending' : 'done')}>V{v}</span>
+                    <div className="fixture-teams">
+                      <span className={ganoA ? 'team-win' : ''}>{eA}</span>
+                      <span className="fixture-vs">{p?.jugado ? sA + ':' + sB : 'vs'}</span>
+                      <span className={ganoB ? 'team-win' : ''}>{eB}</span>
+                    </div>
+                    {p?.fecha && <span className="fixture-date">{formatFecha(p.fecha)}</span>}
+                    {p?.jugado && <span className="badge win">🏆 {ganoA ? eA : eB}</span>}
                   </div>
-                  {p?.fecha && <span className="fixture-date">{formatFecha(p.fecha)}</span>}
-                  {p?.jugado && <span className="badge win">🏆 {p.ganador === 'A' ? eA : eB}</span>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
