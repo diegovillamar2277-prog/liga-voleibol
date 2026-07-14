@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { sb } from '../lib/supabase.js';
 import {
   getLigaById, getMisLigas, actualizarLiga, renovarCodigo, actualizarAlias,
-  getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo,
+  getEquipos, agregarEquipo, actualizarEquipo, eliminarEquipo, aplicarPagoArbitraje,
   getPartidos, guardarPartido, actualizarPartido, eliminarPartido,
   invitarCoAdmin, quitarMiembro, getMiembros,
   contarLigasDeUsuario, crearLiga, enviarPeticion, eliminarLiga,
@@ -714,22 +714,30 @@ export function TabPartidos({ liga, equipos = [], partidos = [], refresh }) {
       const precioArb   = liga.config?.precioArbitraje ?? 120;
       const equipoAData = equipos.find(e => e.nombre === eqA);
       const equipoBData = equipos.find(e => e.nombre === eqB);
-      const saldoA      = equipoAData?.arb_saldo || 0;
-      const saldoB      = equipoBData?.arb_saldo || 0;
-      const pagoA       = saldoA >= precioArb;
-      const pagoB       = saldoB >= precioArb;
 
       const guardado = await guardarPartido(liga.id, {
         vuelta, fecha, equipo_a: eqA, equipo_b: eqB,
         sets: setsData, sets_a: sA, sets_b: sB, ganador, jugado: true,
-        pago_arb_a: pagoA,
-        pago_arb_b: pagoB,
+        pago_arb_a: false,
+        pago_arb_b: false,
       });
 
-      if (pagoA && equipoAData) await actualizarEquipo(equipoAData.id, { arb_saldo: saldoA - precioArb });
-      if (pagoB && equipoBData) await actualizarEquipo(equipoBData.id, { arb_saldo: saldoB - precioArb });
+      // No marcamos pago_arb aquí a partir de un saldo leído en el cliente:
+      // dos registros casi simultáneos podían leer el mismo saldo y pisarse
+      // al escribir, perdiendo dinero. En vez de eso, dejamos que el
+      // servidor aplique el saldo existente de cada equipo (en orden de
+      // fecha) de forma atómica — cubre este partido u otros más viejos
+      // que sigan pendientes, según corresponda.
+      const cubiertos = [];
+      if (equipoAData) {
+        const { cubiertos: n } = await aplicarPagoArbitraje(equipoAData.id, 0, precioArb);
+        if (n > 0) cubiertos.push(eqA);
+      }
+      if (equipoBData) {
+        const { cubiertos: n } = await aplicarPagoArbitraje(equipoBData.id, 0, precioArb);
+        if (n > 0) cubiertos.push(eqB);
+      }
 
-      const cubiertos = [pagoA ? eqA : null, pagoB ? eqB : null].filter(Boolean);
       const extra = cubiertos.length ? ' — Cubierto con saldo: ' + cubiertos.join(', ') : '';
       toast(eqA + ' ' + sA + ':' + sB + ' ' + eqB + extra);
       await notifyDesdePartidoGuardado(liga, guardado);
@@ -1084,33 +1092,22 @@ function PagoEquipo({ eq, partidos = [], liga, precioA, refresh }) {
   const pendienteNeto = Math.max(0, deudaBruta - saldo);
   const saldoLibre    = Math.max(0, saldo - deudaBruta);
 
+  // Estas dos acciones ya no leen/calculan arb_saldo en el cliente: dos
+  // pagos casi simultáneos (o un doble clic) podían leer el mismo saldo y
+  // pisarse al guardar, perdiendo dinero. El servidor ahora hace todo
+  // (sumar, cubrir partidos pendientes en orden de fecha, guardar el
+  // resto) en una sola transacción atómica.
   const confirmar_ = async () => {
     const m = parseInt(monto);
     if (!m || m < 1) { toast('Ingresa un monto válido', 'error'); return; }
-    let resto = saldo + m;
-    for (const p of pendientes) {
-      if (resto < precioA) break;
-      const campo = p.equipo_a === eq.nombre ? 'pago_arb_a' : 'pago_arb_b';
-      await actualizarPartido(p.id, { [campo]: true });
-      resto -= precioA;
-    }
-    await actualizarEquipo(eq.id, { arb_saldo: resto });
+    const { resto } = await aplicarPagoArbitraje(eq.id, m, precioA);
     const extra = resto > 0 ? ' — Saldo a favor: $' + resto.toLocaleString('es-MX') : '';
     toast('$' + m.toLocaleString('es-MX') + ' registrado' + extra);
     setOpen(false); setMonto(''); refresh();
   };
 
   const aplicarSaldo = async () => {
-    let resto = saldo;
-    let cubiertos = 0;
-    for (const p of pendientes) {
-      if (resto < precioA) break;
-      const campo = p.equipo_a === eq.nombre ? 'pago_arb_a' : 'pago_arb_b';
-      await actualizarPartido(p.id, { [campo]: true });
-      resto -= precioA;
-      cubiertos++;
-    }
-    await actualizarEquipo(eq.id, { arb_saldo: resto });
+    const { cubiertos, resto } = await aplicarPagoArbitraje(eq.id, 0, precioA);
     if (cubiertos > 0) {
       const pl = cubiertos !== 1;
       const restMsg = resto > 0 ? ' — $' + resto.toLocaleString('es-MX') + ' restante' : '';

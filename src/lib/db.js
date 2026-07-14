@@ -197,6 +197,17 @@ export async function eliminarEquipo(id) {
   await sb.from('teams').delete().eq('id', id);
 }
 
+// Aplica un pago/abono de arbitraje de forma atómica en el servidor
+// (bloquea la fila del equipo, evita perder dinero por condiciones de
+// carrera entre lecturas/escrituras de arb_saldo desde el cliente).
+export async function aplicarPagoArbitraje(teamId, monto, precioArb) {
+  const { data, error } = await sb.rpc('aplicar_pago_arbitraje', {
+    p_team_id: teamId, p_monto: monto, p_precio_arb: precioArb,
+  });
+  if (error) throw new Error('Error al aplicar pago: ' + error.message);
+  return data?.[0] || { cubiertos: 0, resto: 0 };
+}
+
 // ════════════════════════════════════════════════════════════
 //  PARTIDOS
 // ════════════════════════════════════════════════════════════

@@ -226,3 +226,66 @@ begin
   return codigo;
 end;
 $$;
+
+-- ── FUNCIÓN: aplicar pago/saldo de arbitraje de forma atómica ──
+-- Evita condiciones de carrera: el cliente ya NO lee arb_saldo,
+-- calcula el resto y lo vuelve a escribir (eso permite que dos
+-- operaciones casi simultáneas se pisen y se pierda dinero).
+-- Esta función bloquea la fila del equipo (FOR UPDATE), suma el
+-- monto nuevo al saldo existente, cubre los partidos pendientes
+-- en orden de fecha (igual que el botón "Aplicar saldo"), y
+-- guarda el resto — todo en una sola transacción.
+create or replace function public.aplicar_pago_arbitraje(
+  p_team_id    uuid,
+  p_monto      numeric,
+  p_precio_arb numeric
+)
+returns table(cubiertos int, resto numeric)
+language plpgsql
+as $$
+declare
+  v_team      record;
+  v_total     numeric;
+  v_cubiertos int := 0;
+  v_match     record;
+begin
+  select * into v_team from public.teams where id = p_team_id for update;
+  if not found then
+    raise exception 'Equipo no encontrado';
+  end if;
+
+  v_total := coalesce(v_team.arb_saldo, 0) + coalesce(p_monto, 0);
+
+  for v_match in
+    select m.id, m.equipo_a, m.equipo_b
+    from public.matches m
+    where m.league_id = v_team.league_id
+      and m.jugado = true
+      and m.es_playoff = false
+      and (
+        (m.equipo_a = v_team.nombre and m.pago_arb_a = false) or
+        (m.equipo_b = v_team.nombre and m.pago_arb_b = false)
+      )
+    order by m.fecha asc nulls last, m.created_at asc
+  loop
+    exit when v_total < p_precio_arb;
+    if v_match.equipo_a = v_team.nombre then
+      update public.matches set pago_arb_a = true where id = v_match.id;
+    else
+      update public.matches set pago_arb_b = true where id = v_match.id;
+    end if;
+    v_total := v_total - p_precio_arb;
+    v_cubiertos := v_cubiertos + 1;
+  end loop;
+
+  update public.teams set arb_saldo = v_total where id = p_team_id;
+
+  return query select v_cubiertos, v_total;
+end;
+$$;
+
+-- ── Idempotencia de webhooks de MercadoPago ─────────────────
+-- Sin esto, si MercadoPago reintenta la notificación (o alguien
+-- reenvía el mismo payment id manualmente) el webhook vuelve a
+-- sumar meses de plan gratis con el mismo pago ya procesado.
+alter table public.profiles add column if not exists last_mp_payment_id text;

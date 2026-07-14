@@ -47,8 +47,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Sin userId en referencia' });
     }
 
-    const ahora   = new Date();
-    const expira  = new Date(ahora);
+    const paymentId = String(data.id);
+
+    // Idempotencia: MercadoPago puede reenviar la misma notificación
+    // (retries) y cualquiera que conozca un payment id aprobado puede
+    // volver a golpear esta URL. Sin este check, cada reenvío del mismo
+    // pago vuelve a sumar meses de plan gratis.
+    const { data: perfilActual } = await sb
+      .from('profiles')
+      .select('plan_expira, addon_vp_expira, last_mp_payment_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (perfilActual?.last_mp_payment_id === paymentId) {
+      return res.status(200).json({ ok: true, alreadyProcessed: true });
+    }
+
+    const ahora = new Date();
+    // Si el plan actual todavía no vence, la renovación se suma a partir de
+    // esa fecha en vez de resetear a "ahora" — si no, un usuario que renueva
+    // antes de vencer pierde los días que le quedaban.
+    const expiraVigente = perfilActual?.plan_expira ? new Date(perfilActual.plan_expira) : null;
+    const base = (expiraVigente && expiraVigente > ahora) ? expiraVigente : ahora;
+    const expira = new Date(base);
 
     // ── Determinar el plan y la expiración ────────────────────────────────
     let planFinal  = 'basico';
@@ -68,7 +89,9 @@ export default async function handler(req, res) {
       addonUpdate = { addon_vista_publica: true, addon_vp_expira: null };
     }
     else if (plan === 'basico' && tipo === 'addon_temporada') {
-      const expiraAddon = new Date(ahora);
+      const addonVigente = perfilActual?.addon_vp_expira ? new Date(perfilActual.addon_vp_expira) : null;
+      const baseAddon = (addonVigente && addonVigente > ahora) ? addonVigente : ahora;
+      const expiraAddon = new Date(baseAddon);
       expiraAddon.setMonth(expiraAddon.getMonth() + 6);
       addonUpdate = { addon_vista_publica: true, addon_vp_expira: expiraAddon.toISOString() };
     }
@@ -83,6 +106,7 @@ export default async function handler(req, res) {
     // ── Construir el update de Supabase ───────────────────────────────────
     const updateFields = {
       plan_origen: 'mercadopago',
+      last_mp_payment_id: paymentId,
     };
 
     if (addonUpdate) {
